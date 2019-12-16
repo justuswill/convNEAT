@@ -1,0 +1,29 @@
+Problems:
+- Die Bewertung erfolgt erst nach Abschluss des gesamten Trainingsvorgangs, was enorm zeitaufwendig ist
+- Der Trainingsfortschritt bleibt nicht von Generation zu Generation erhalten, in jeder Generation werden die Netze neu zufällig initialisiert
+- Neue Netze werden oft schon nach einer Iteration wieder verworfen, da sie nicht die Zeit haben entwickelt zu werden
+  und bei der Bewertung dementsprechend schlecht abschneiden
+
+Enhancements:
+- Training zunächst nur auf kleinen Ausschnitten des
+Trainingsdatensatzes, Abtrennung eines Validierungsdatensatzes und
+Nutzung von Early-Stopping-Verfahren
+- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten
+(z.B. Parameter Layer-weise zwischenspeichern, neu initialisieren nur
+selten und natürlich bei neu hinzugefügten Layern)
+- Besseres Auswahlverfahren für überlebende / zu mutierende Netze
+(ähnlich wie NEAT), dabei neue bzw. weniger trainierte Netze schützen
+(Trainingsfortschritt in Ähnlichkeitsfunktion einbauen)
+- Möglicherweise den Suchraum um neue Neuronale-Netz-Architekturen erweitern
+
+Ideas:
+- Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
+  More training -> higher penalty
+- Every gene has a detail to its weight. e+v of all weights, e+v in regions (e.g. col,row,blocks), all weights
+  Higher detail -> higher penalty
+
+
+Genes:
+- Conv
+- Pool
+- Dense
