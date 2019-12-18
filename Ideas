@@ -16,6 +16,18 @@ selten und natürlich bei neu hinzugefügten Layern)
 (Trainingsfortschritt in Ähnlichkeitsfunktion einbauen)
 - Möglicherweise den Suchraum um neue Neuronale-Netz-Architekturen erweitern
 
+Genome:
+- Nodes: Filter/Pooling Layer:
+  - Filter:
+    * 3D: Tiefe + Höhe/Breite
+    * Wenn Höhe Filter zu klein:
+      1. Nimm die ersten Layer von Depth
+      2. Wiederhole bis passt
+    * Wenn Höhe Filter zu groß:
+      1. Cut the rest of data
+      2. Start again an.
+  -> Dont use all the data vs smaller thing. (maybe var)
+- Edges: -
 Ideas:
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty
