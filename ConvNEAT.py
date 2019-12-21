@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import functools
 import itertools
 import operator
@@ -13,227 +11,279 @@ import torchvision
 
 # genetic components
 def weighted_choice(choices, weights):
-    s = sum(weights)
-    thresholds = []
-    t = 0
-    for w in weights[:-1]:
-        t += w
-        thresholds.append(t / s)
-    r = random.random()
-    for c, t in zip(choices, thresholds):
-        if r < t:
-            return c
-    return choices[-1]
+    return np.array(choices)[np.where(np.cumsum(weights) > random.random() * np.sum(weights))[0][0]]
 
 
-class GenomeLayer:
+def random_choices(choices, chances):
+    return list(np.array(choices)[np.random.rand(len(chances)) < chances])
 
-    def __init__(self, genome):
-        self.genome = genome
 
+class _Gene:
+
+    def __repr__(self):
+        r = super().__repr__()
+        return r[:-1] + ' | ID = %d ' % self.id + r[-1:]
+
+    # A mutation is decided to happen. Returns itself.
     def mutate_random(self):
-        pass
+        return self
 
     def dissimilarity(self, other):
         return self != other
 
 
-class GenomeConv(GenomeLayer):
+class KernelGene(_Gene):
+    """
+    Kernels are the edges of the graph
+    """
 
-    def __init__(self, genome):
-        super().__init__(genome)
-        self.init_out_channels()
-        self.init_activation()
-        self.init_half_kernel_size()
-        self.init_pool()
+    def __init__(self, id, id_in, id_out, size=[None, None, None], stride=None, padding=None):
+        self.id = id
+        self.id_in = id_in
+        self.id_out = id_out
 
-    def __repr__(self):
-        r = super().__repr__()
-        return (r[:-1] +
-                ', out_channels: {}, activation: {}, half_kernel_size: {}, '
-                        'pool: {}'.format(
-                    self.out_channels, self.activation,
-                    self.half_kernel_size, self.pool) +
-                r[-1:])
-
-    def init_out_channels(self):
-        self.out_channels = random.randrange(4, 16)
-
-    def init_activation(self):
-        self.activation = random.choice(['relu', 'tanh'])
-
-    def init_half_kernel_size(self):
-        self.half_kernel_size = random.randrange(3)
-
-    def init_pool(self):
-        self.pool = bool(random.randrange(2))
-
-    def mutate_out_channels(self):
-        self.out_channels = max(
-                self.out_channels + (random.randrange(-2, 2) or 2), 1)
-
-    def mutate_activation(self):
-        if self.activation == 'relu':
-            self.activation = 'tanh'
-        else:
-            self.activation = 'relu'
-
-    def mutate_half_kernel_size(self):
-        self.half_kernel_size = max(
-                self.half_kernel_size + (random.randrange(-1, 1) or 1), 0)
-
-    def mutate_pool(self):
-        self.pool = not self.pool
-
-    def mutate_random(self):
-        weighted_choice((
-                    self.init_out_channels,
-                    self.init_half_kernel_size,
-                    self.mutate_out_channels,
-                    self.mutate_activation,
-                    self.mutate_half_kernel_size,
-                    self.mutate_pool,
-                ), (1, 1, 2, 1, 2, 1))()
-
-    def dissimilarity(self, other):
-        return (abs(self.out_channels - other.out_channels) * 4 +
-                (0 if self.activation == other.activation else 16) +
-                abs(self.half_kernel_size - other.half_kernel_size) * 8 +
-                (0 if self.pool == other.pool else 32))
-
-
-class GenomeLinear(GenomeLayer):
-
-    def __init__(self, genome):
-        super().__init__(genome)
-        self.init_out_channels()
-        self.init_activation()
+        [depth, width, height] = size
+        self.depth = depth or self.init_depth()
+        self.width = width or self.init_width()
+        self.height = height or self.init_height()
+        self.stride = stride or self.init_stride()
+        self.padding = padding if padding is not None else self.init_padding()
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] +
-                ', out_channels: {}, activation: {}'.format(
-                    self.out_channels, self.activation) +
-                r[-1:])
+        return (r[:-1] + 'size=%d*%d*%d, str=%d, pad=%d' %
+                (self.depth, self.width, self.height, self.stride, self.padding) + r[-1:])
 
-    def init_out_channels(self):
-        self.out_channels = random.randrange(16, 64)
+    def init_depth(self):
+        return 1
 
-    def init_activation(self):
-        self.activation = random.choice(['relu', 'tanh'])
+    def init_width(self):
+        return random.randrange(3, 6)
 
-    def mutate_out_channels(self):
-        self.out_channels = max(
-                self.out_channels + (random.randrange(-8, 8) or 8), 1)
+    def init_height(self):
+        return random.randrange(3, 6)
 
-    def mutate_activation(self):
-        if self.activation == 'relu':
-            self.activation = 'tanh'
-        else:
-            self.activation = 'relu'
+    def init_stride(self):
+        return 1
+
+    def init_padding(self):
+        return 0
+
+    def mutate_depth(self):
+        self.depth = max(1, self.depth + random.choice([-2, -1, 1, 2]))
+
+    def mutate_width(self):
+        self.width = max(1, self.width + random.choice([-2, -1, 1, 2]))
+
+    def mutate_height(self):
+        self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
+
+    def mutate_size(self):
+        r = random.choice([-2, -1, 1, 2])
+        [self.width, self.height] = map(lambda x: max(1, x + r), [self.width, self.height])
+
+    def mutate_stride(self):
+        self.depth = max(1, self.depth + random.choice([-2, -1, 1, 2]))
+
+    def mutate_padding(self):
+        self.depth = max(1, self.depth + random.choice([-2, -1, 1, 2]))
 
     def mutate_random(self):
-        weighted_choice((
-                    self.init_out_channels,
-                    self.mutate_out_channels,
-                    self.mutate_activation,
-                ), (1, 2, 1))()
+        mutations = random_choices((self.mutate_depth, self.mutate_width, self.mutate_height, self.mutate_size,
+                                    self.mutate_stride, self.mutate_padding),
+                                   (0.1, 0.1, 0.1, 0.2, 0.3, 0.2))
+        for mutate in mutations:
+            mutate()
+        return self
 
-    def dissimilarity(self, other):
-        return (abs(self.out_channels - other.out_channels) +
-                (0 if self.activation == other.activation else 16))
+class PoolGene(_Gene):
+    """
+    Pooling Layers are edges of the graph
+    """
+    def __init__(self, id, id_in, id_out, pooling=None, size=[None, None], padding=None):
+        self.id = id
+        self.id_in = id_in
+        self.id_out = id_out
+
+        self.possible_pooling = ['max', 'avg']
+
+        self.pooling = pooling or self.init_pooling()
+        [width, height] = size
+        self.width = width or self.init_width()
+        self.height = height or self.init_height()
+        self.padding = padding or self.init_padding()
+
+    def __repr__(self):
+        r = super().__repr__()
+        return (r[:-1] + 'size=%d*%d*%d, str=%d, pad=%d' %
+                (self.depth, self.width, self.height, self.stride, self.padding) + r[-1:])
+
+    def init_pooling(self):
+        self.pooling = random.choice(self.pooling)
+
+    def init_width(self):
+        return random.randrange(3, 6)
+
+    def init_height(self):
+        return random.randrange(3, 6)
+
+    def init_padding(self):
+        return 0
+
+    def mutate_pooling(self):
+        self.pooling = random.choice([x for x in self.possible_pooling if x != self.pooling])
+
+    def mutate_width(self):
+        self.width = max(1, self.width + random.choice([-2, -1, 1, 2]))
+
+    def mutate_height(self):
+        self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
+
+    def mutate_size(self):
+        [self.width, self.height] = [self.mutate_width(), self.mutate_height()]
+
+    def mutate_padding(self):
+        self.padding = max(1, self.padding + random.choice([-2, -1, 1, 2]))
+
+    def mutate_random(self):
+        mutations = random_choices((self.mutate_pooling, self.mutate_width, self.mutate_height, self.mutate_size,
+                                    self.mutate_padding),
+                                   (0.4, 0.2, 0.2, 0.5, 0.2))
+        for mutate in mutations:
+            mutate()
+        return self
+
+class DenseGene(_Gene):
+    """
+    Fully Conected Layers are the Edges of the rest of the graph
+    We don't know the size of the flattened first layer,
+    so the number of hidden neurons per layer it determined by the distance to the layer before
+    """
+
+    def __init__(self, id, id_in, id_out, size_change=None, activation=None):
+        self.id = id
+        self.id_in = id_in
+        self.id_out = id_out
+
+        self.possible_activations = ['relu', 'tanh']
+
+        self.size_change = size_change or self.init_size_change()
+        self.activation = activation or self.init_activation()
+
+    def __repr__(self):
+        r = super().__repr__()
+        return (r[:-1] + 'size_change=%+d, activation=%s' %
+                (self.size_change, self.activation) + r[-1:])
+
+    def init_size_change(self):
+        return random.choice(list(range(-10, -4)) + list(range(5, 11)))
+
+    def init_activation(self):
+        return random.choice(self.possible_activations)
+
+    def mutate_size_change(self):
+        self.size_change = self.size_change + random.choice(list(range(-10, -4)) + list(range(5, 11)))
+
+    def mutate_activation(self):
+        self.activation = random.choice([x for x in self.possible_activations if x != self.activation])
+
+    def mutate_random(self):
+        mutations = random_choices((self.mutate_size_change, self.mutate_activation),
+                                   (1, 0.2))
+        for mutate in mutations:
+            mutate()
+        return self
+
+class Edge(_Gene):
+    """
+    Symbolizes a Edge, that does nothing, only for initialization.
+    Specify to what it can mutate
+    """
+
+    def __init__(self, id, id_in, id_out, mutate_to=None):
+        self.id = id
+        self.id_in = id_in
+        self.id_out = id_out
+
+        self.mutate_to = mutate_to or self.init_mutate_to
+
+    def init_mutate_to(self):
+        return [[KernelGene, DenseGene], [1, 1]]
+
+    def mutate_random(self):
+        return weighted_choice(*self.mutate_to)(self.id, self.id_in, self.id_out)
+
+
+class Node:
+
+    def __init__(self, id, depth):
+        self.id = id
+        self.depth = depth
+
 
 
 class Genome:
+    """
+    Indirect representation of a feedforward convolutional net.
+    This includes hyperparameters.
+    The Minimal net is:
+    Node 0 'Input' - Edge 3 - Node 1 'Flatten' - Edge 4 - Node 2 'Out'
 
-    # WARNING:
-    # There is no copy method (yet); when copying a genome, make sure to
-    # explicitly create copies of each of the layers
+    Coded as a graph where the edges are the neurons and the edges describe
+    - the convolution operation (kernel)
+    - the sizes of fully connected layers
+    Shape and Number of neurons in a node are only decoded indirectly
+    """
 
-    def __init__(self, population):
+    def __init__(self, population, log_learning_rate=None, genes_and_nodes=None):
         self.population = population
-        self.init_log_learning_rate()
-        self.init_seed()
-        self.convs = []
-        self.linears = []
-        self.layers_by_id = {}
+        self.log_learning_rate = log_learning_rate or self.init_log_learning_rate()
+
+        [self.genes, self.nodes] = genes_and_nodes or self.init_genome()
+        self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] +
-                ', log_learning_rate: {}, seed: {}, convs: {}, '
-                        'linears: {}'.format(
-                    self.log_learning_rate, self.seed, self.convs,
-                    self.linears) +
-                r[-1:])
+        return (r[:-1] + ' | learning_rate=%.4f, genes=%s' %
+                (self.log_learning_rate, self.genes) + r[-1:])
+
+    def init_genome(self):
+        return [[Edge(3, 0, 1, mutate_to=[[KernelGene, DenseGene], [10, 1]]),
+                 Edge(4, 1, 2, mutate_to=[[KernelGene, DenseGene], [1, 10]])],
+                [Node(0, 0), Node(1, 1), Node(2, 2)]]
 
     def next_id(self):
         return self.population.next_id()
 
-    def init_log_learning_rate(self):
-        self.log_learning_rate = random.normalvariate(-6, 2)
+    def dicts_by_id(self):
+        genes_by_id = dict()
+        for gene in self.genes:
+            genes_by_dict = {**genes_by_id, **{gene.id: gene}}
+        nodes_by_id = dict()
+        for node in self.nodes:
+            nodes_by_dict = {**nodes_by_id, **{node.id: node}}
+        return [genes_by_dict, nodes_by_dict]
 
-    def init_seed(self):
-        self.seed = random.randrange(2 ** 32)
+
+    def init_log_learning_rate(self):
+        return random.normalvariate(-6, 2)
 
     def mutate_log_learning_rate(self):
         self.log_learning_rate += random.normalvariate(0, 1)
 
-    def add_conv(self):
-        id_ = self.next_id()
-        c = GenomeConv(self)
-        self.convs.insert(random.randrange(len(self.convs) + 1), c)
-        self.layers_by_id[id_] = c
-
-    def remove_conv(self):
-        if self.convs:
-            self.convs.pop(random.randrange(len(self.convs)))
-
-    def mutate_conv(self):
-        if self.convs:
-            self.convs[random.randrange(len(self.convs))].mutate_random()
-
-    def add_linear(self):
-        id_ = self.next_id()
-        c = GenomeLinear(self)
-        self.linears.insert(random.randrange(len(self.linears) + 1), c)
-        self.layers_by_id[id_] = c
-
-    def remove_linear(self):
-        if self.linears:
-            self.linears.pop(random.randrange(len(self.linears)))
-
-    def mutate_linear(self):
-        if self.linears:
-            self.linears[random.randrange(len(self.linears))].mutate_random()
+    def mutate_genes(self, p):
+        mutate = np.random.rand(len(self.genes)) < p
+        for i, gene in enumerate(self.genes):
+            if mutate[i]:
+                self.genes[i] = gene.mutate_random()
 
     def mutate_random(self):
-        weighted_choice((
-                    self.init_seed,
-                    self.init_log_learning_rate,
-                    self.mutate_log_learning_rate,
-                    self.add_conv,
-                    self.remove_conv,
-                    self.mutate_conv,
-                    self.add_linear,
-                    self.remove_linear,
-                    self.mutate_linear,
-                ), (4, 2, 6, 4, 3, 12, 4, 3, 12))()
+        mutations = random_choices((self.mutate_log_learning_rate, lambda: self.mutate_genes(0.5)),
+                                   (0.5, 1))
 
-    def dissimilarity(self, other):
-        d = (abs(self.log_learning_rate - other.log_learning_rate) * 16 +
-                (0 if self.seed == other.seed else 4))
-        for id_, c0 in self.layers_by_id.items():
-            c1 = other.layers_by_id.get(id_)
-            if c1 is not None:
-                d += c0.dissimilarity(c1)
-            else:
-                d += 256
-        for id_ in other.layers_by_id:
-            if id_ not in self.layers_by_id:
-                d += 256
-        return d
-
+        for mutate in mutations:
+            mutate()
+        return self
 
 class Population:
 
@@ -265,182 +315,11 @@ class Population:
         for i in range(len(self.genomes) // 4, len(self.genomes) * 3 // 4):
             self.genomes[i].mutate_random()
 
-
-# neural network components
-
-class Net(torch.nn.Module):
-
-    def __init__(self, genome):
-        super().__init__()
-        possible_activations = {
-                    'relu': torch.nn.functional.relu,
-                    'tanh': torch.tanh,
-                }
-        num_channels = 1
-        width = 28
-        height = 28
-        self.convs = []
-        for i, gconv in enumerate(genome.convs):
-            conv = torch.nn.Conv2d(
-                        in_channels=num_channels,
-                        out_channels=gconv.out_channels,
-                        kernel_size=gconv.half_kernel_size*2+1,
-                        padding=gconv.half_kernel_size,
-                    )
-            activation = possible_activations[gconv.activation]
-            pool = gconv.pool
-            self.convs.append((conv, activation, pool))
-            self.add_module('convs[{}][0]'.format(i), conv)
-            num_channels = gconv.out_channels
-            if pool:
-                width = -(-width // 2)
-                height = -(-height // 2)
-        self.pool = torch.nn.MaxPool2d(kernel_size=2)
-        num_channels = num_channels * width * height
-        self.linears = []
-        for i, glinear in enumerate(genome.linears):
-            linear = torch.nn.Linear(
-                        in_features=num_channels,
-                        out_features=glinear.out_channels,
-                    )
-            activation = possible_activations[glinear.activation]
-            self.linears.append((linear, activation))
-            self.add_module('linears[{}][0]'.format(i), linear)
-            num_channels = glinear.out_channels
-        self.final_linear = linear = torch.nn.Linear(
-                    in_features=num_channels,
-                    out_features=10,
-                )
-
-    def forward(self, x):
-        batch_size, num_channels, height, width = x.shape
-        for conv, activation, pool in self.convs:
-            x = conv(x)
-            x = activation(x)
-            if pool:
-                x = self.pool(x)
-        x = torch.reshape(x, (batch_size, -1))
-        for linear, activation in self.linears:
-            x = linear(x)
-            x = activation(x)
-        x = self.final_linear(x)
-        return x
-
-
-# create neural network from genome, then train and evaluate
-
-def evaluate_genome_on_data(
-        genome, torch_device, data_loader_train, data_loader_test):
-
-    print('Instantiating neural network from the following genome:')
-    print(genome)
-
-    torch.random.manual_seed(genome.seed)
-    net = Net(genome)
-    net = net.to(torch_device)
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(net.parameters(),
-            lr=2**genome.log_learning_rate, momentum=.9)
-
-    print('Beginning training')
-    for epoch in range(2):
-        epoch_loss = 0.
-        batch_loss = 0.
-        n = len(data_loader_train) // 10
-        for i, (inputs, labels) in enumerate(data_loader_train):
-            optimizer.zero_grad()
-            outputs = net(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
-            batch_loss += loss.item()
-            if (i+1) % n == 0:
-                print('[{}, {:3}] loss: {:.3f}'.format(
-                        epoch, i+1, batch_loss / n))
-                batch_loss = 0.
-        print('[{}] loss: {:.3f}'.format(
-                epoch, epoch_loss / len(data_loader_train)))
-    print('Finished training')
-
-    class_total = list(0 for i in range(10))
-    class_correct = list(0 for i in range(10))
-    with torch.no_grad():
-        for inputs, labels in data_loader_test:
-            outputs = net(inputs)
-            predictions = torch.argmax(outputs, dim=1)
-            correct_predictions = predictions == labels
-            for label, correct in zip(labels, correct_predictions):
-                class_total[label] += 1
-                class_correct[label] += correct.item()
-    for i in range(10):
-        print('Accuracy of {}: {:5.2f} %  ({} / {})'.format(
-                i, 100 * class_correct[i] / class_total[i], class_correct[i],
-                class_total[i]))
-
-    total = sum(class_total)
-    correct = sum(class_correct)
-    print('Accuracy of the network on the {} test images: {:5.2f} %  '
-            '({} / {})'.format(total, 100 * correct / total, correct, total))
-    print()
-
-    return correct / total
-
-
-def imshow(img):
-    img = img.detach().to(device='cpu').numpy()
-    img = img[0]
-    img = (img + 1) * (1/2)
-    plt.imshow(img)
-    plt.show()
-
-
 def main():
-
-    # manually seed all random number generators for reproducible results
-    random.seed(0)
-    #np.random.seed(0)
-    torch.random.manual_seed(0)
-
-    # set up datasets
-    torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    transform = torchvision.transforms.Compose([
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Lambda(
-                    lambda x: x.to(device=torch_device)),
-                torchvision.transforms.Normalize((1/2,), (1/2,)),
-            ])
-    target_transform = torchvision.transforms.Lambda(
-            lambda x: torch.tensor(x, device=torch_device))
-    dataset_train = torchvision.datasets.MNIST(
-            'data', train=True, transform=transform,
-            target_transform=target_transform, download=True)
-    data_loader_train = torch.utils.data.DataLoader(
-            dataset_train, batch_size=100, shuffle=True)
-    dataset_test = torchvision.datasets.MNIST(
-            'data', train=False, transform=transform,
-            target_transform=target_transform, download=True)
-    data_loader_test = torch.utils.data.DataLoader(
-            dataset_test, batch_size=100, shuffle=False)
-
-    ## display some test images
-    #images, labels = next(iter(data_loader_test))
-    #print(labels)
-    #imshow(torchvision.utils.make_grid(images))
-
-    # run genetic algorithm
-    print('\n\nInitializing population\n')
-    population = Population(n=16, evaluate_genome=functools.partial(
-                evaluate_genome_on_data,
-                torch_device=torch_device,
-                data_loader_train=data_loader_train,
-                data_loader_test=data_loader_test,
-            ))
-    for generation in range(16):
-        population.evolve(generation)
-
+    g = Genome(1)
+    for i in range(10):
+        print(g)
+        g.mutate_random()
 
 if __name__ == '__main__':
     main()
-
-

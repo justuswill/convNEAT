@@ -401,6 +401,7 @@ def main():
     random.seed(0)
     #np.random.seed(0)
     torch.random.manual_seed(0)
+    np.random.seed(0)
 
     # set up datasets
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
