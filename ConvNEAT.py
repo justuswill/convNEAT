@@ -68,7 +68,8 @@ class KernelGene(Gene):
     Kernels are the edges of the graph
     """
 
-    def __init__(self, id, id_in, id_out, size=[None, None, None], stride=None, padding=None):
+    def __init__(self, id, id_in, id_out, size=[None, None, None], stride=None, padding=None,
+                 depth_size_change=None, depth_mult=None):
         super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to())
 
         [depth, width, height] = size
@@ -77,6 +78,8 @@ class KernelGene(Gene):
         self.height = height or self.init_height()
         self.stride = stride or self.init_stride()
         self.padding = padding if padding is not None else self.init_padding()
+        self.depth_size_change = depth_size_change if depth_size_change is not None else self.init_depth_size_change()
+        self.depth_mult = depth_mult or self.init_depth_mult()
 
     def __repr__(self):
         r = super().__repr__()
@@ -101,6 +104,12 @@ class KernelGene(Gene):
     def init_padding(self):
         return 0
 
+    def init_depth_size_change(self):
+        return 0
+
+    def init_depth_mult(self):
+        return 1
+
     def init_mutate_to(self):
         return [[KernelGene, PoolGene, DenseGene], [1, 2, 0]]
 
@@ -121,19 +130,26 @@ class KernelGene(Gene):
         self.depth = max(1, self.depth + random.choice([-2, -1, 1, 2]))
 
     def mutate_padding(self):
-        self.depth = max(1, self.depth + random.choice([-2, -1, 1, 2]))
+        self.depth = max(0, self.depth + random.choice([-2, -1, 1, 2]))
+
+    def mutate_depth_size_change(self):
+        self.depth_size_change = self.depth_size_change + random.choice([-2, -1, 1, 2])
+
+    def mutate_depth_mult(self):
+        self.depth_mult = max(1, self.depth_mult + random.choice([-2, -1, 1, 2]))
 
     def mutate_random(self):
         mutations = random_choices((self.mutate_depth, self.mutate_width, self.mutate_height, self.mutate_size,
-                                    self.mutate_stride, self.mutate_padding),
-                                   (0.1, 0.1, 0.1, 0.2, 0.3, 0.2))
+                                    self.mutate_stride, self.mutate_padding,
+                                    self.mutate_depth_size_change, self.mutate_depth_mult),
+                                   (0.1, 0.1, 0.1, 0.2, 0.3, 0.2, 0.2, 0.1))
         for mutate in mutations:
             mutate()
         return self
 
     def output_size(self, in_size):
         [in_depth, in_width, in_height] = in_size
-        out_depth = self.depth
+        out_depth = in_depth + self.depth_size_change
         out_width = ((in_width - self.width + 2 * self.padding - 1) // self.stride) + 1
         out_height = ((in_height - self.height + 2 * self.padding - 1) // self.stride) + 1
         return [out_depth, out_width, out_height]
@@ -273,7 +289,7 @@ class Node:
         self.depth = depth
         self.role = role
 
-        self.possible_merges = ['upscale', 'downscale', 'padding', 'avgscale']
+        self.possible_merges = ['upsample', 'downsample', 'padding', 'avgscale']
 
         self.merge = merge or self.init_merge()
         self.size = None
@@ -525,55 +541,100 @@ class Net(torch.nn.Module):
 
     def __init__(self, genome, input_size, output_size):
         super().__init__()
-
-        genome.set_sizes()
-
         possible_activations = {'relu': torch.nn.functional.relu,
                                 'tanh': torch.tanh}
 
-        width = 28
-        height = 28
-        self.convs = []
-        for i, gconv in enumerate(genome.convs):
-            conv = torch.nn.Conv2d(
-                        in_channels=1,
-                        out_channels=gconv.out_channels,
-                        kernel_size=gconv.half_kernel_size*2+1,
-                        padding=gconv.half_kernel_size,
+        genome.set_sizes(input_size)
+        self.nodes = sorted(genome.nodes, key=lambda n: n.depth)
+        self.modules_by_id = dict()
+
+        for gene in genome.genes:
+            if genome.nodes_by_id[gene.id_in].size is not None:
+                self.modules_by_id[gene.id] = []
+                n_in, n_out = map(lambda x: genome.nodes_by_id[x], [gene.id_in, gene.id_out])
+                if type(gene) == KernelGene:
+                    depth_wise = torch.nn.Conv2d(
+                        in_channels=n_in.size[0],
+                        out_channels=n_in.size[0]*gene.depth_multiplicator,
+                        kernel_size=gene.size[1:],
+                        stride=gene.stride,
+                        padding=gene.padding,
+                        groups=n_in.size[0],
+                        bias=False
                     )
-            activation = possible_activations[gconv.activation]
-            pool = gconv.pool
-            self.convs.append((conv, activation, pool))
-            self.add_module('convs[{}][0]'.format(i), conv)
-        self.pool = torch.nn.MaxPool2d(kernel_size=2)
-        self.linears = []
-        for i, glinear in enumerate(genome.linears):
-            linear = torch.nn.Linear(
-                        in_features=1,
-                        out_features=glinear.out_channels,
+                    point_wise = torch.nn.Conv2d(
+                        in_channels=n_in.size[0]*gene.depth_multiplicator,
+                        out_channels=n_out.size[0],
+                        kernel_size=1,
+                        bias=False
                     )
-            activation = possible_activations[glinear.activation]
-            self.linears.append((linear, activation))
-            self.add_module('linears[{}][0]'.format(i), linear)
-            num_channels = glinear.out_channels
-        self.final_linear = linear = torch.nn.Linear(
-                    in_features=num_channels,
-                    out_features=10,
-                )
+                    names = ['conv1_%03d' % gene.id, 'conv2_%03d' % gene.id]
+                    self.add_module(names[0], depth_wise)
+                    self.add_module(names[1] % gene.id, point_wise)
+                    self.modules_by_id[gene.id] += names
+                elif type(gene) == PoolGene:
+                    if gene.pooling == 'max':
+                        pool = torch.nn.MaxPool2d(
+                            kernel_size=gene.size,
+                            stride=gene.stride,
+                            padding=gene.padding
+                        )
+                    elif gene.pooling == 'avg':
+                        pool = torch.nn.AvgPool2d(
+                            kernel_size=gene.size,
+                            stride=gene.stride,
+                            padding=gene.padding
+                        )
+                    else:
+                        raise ValueError('Pooling type %s not supported' % gene.pooling)
+                    self.add_module('pool_%03d' % gene.id, pool)
+                    self.modules_by_id[gene.id] += ['pool_%03d' % gene.id]
+                elif type(gene) == DenseGene:
+                    dense = torch.nn.Linear(
+                        in_features=int(np.prod(n_in.size)),
+                        out_features=int(np.prod(n_out.size))
+                    )
+                    self.add_module('linear_%03d' % gene.id, torch.nn.Bottle(dense, 1, 1))
+                    self.modules_by_id[gene.id] += ['linear_%03d' % gene.id]
+                else:
+                    raise ValueError('Module type %s not supported' % type(gene))
+
+        for node in genome.nodes:
+            self.modules_by_id[node.id] = []
+            if node.merge in ['upsample', 'downsample', 'avgsample']:
+                self.modules_by_id[node.id] += [lambda x, size=node.size:
+                    torch.nn.functional(x, size=[list(x.shape)[1], size[1], size[2]], mode='bilinear')]
+            elif node.merge == 'padding':
+                self.modules_by_id[node.id] += [lambda x, size=node.size:
+                    torch.nn.ZeroPad2d([torch.floor(size[1] - x.shape[2]), torch.ceil(size[1] - x.shape[2]),
+                                        torch.floor(size[2] - x.shape[3]), torch.ceil(size[2] - x.shape[3])])(x)]
+            else:
+                raise ValueError('Merge type %s not supported' % node.merge)
+            if node.role == 'flatten':
+                self.modules_by_id[node.id] += [lambda x:
+                    torch.reshape(x, [x.shape[0], 1, 1, int(np.prod(x.shape[1:4]))])]
+
 
     def forward(self, x):
-        batch_size, num_channels, height, width = x.shape
-        for conv, activation, pool in self.convs:
-            x = conv(x)
-            x = activation(x)
-            if pool:
-                x = self.pool(x)
-        x = torch.reshape(x, (batch_size, -1))
-        for linear, activation in self.linears:
-            x = linear(x)
-            x = activation(x)
-        x = self.final_linear(x)
-        return x
+        nodes = sorted(self.genome.nodes, key=lambda n: n.depth)
+        outputs_by_id = {0: x}
+        for node in nodes:
+            # All reachable incoming edges that are enabled
+            in_edges = [edge for edge in self.genes if edge.enabled and edge.id_in in outputs_by_id.keys()
+                        and edge.id_out == node.id]
+            if len(in_edges) > 0:
+                data_in = []
+                for gene in in_edges:
+                    y = outputs_by_id[gene.id_in]
+                    for module in self.modules_by_id[gene.id]:
+                        y = self.module(y)
+                    data_in += [y]
+                data_in = list(map(self.modules_by_id[node.id][0], data_in))
+                z = torch.cat(data_in, dim=1)
+                for f in self.modules_by_id[node.id][1:]:
+                    z = f(z)
+                outputs_by_id[node.id] = z
+        return torch.reshape(outputs_by_id[2], (x.shape[0], -1))
 
 
 def main():
@@ -584,6 +645,7 @@ def main():
     while True:
         g.visualize(input_size=[3, 50, 50])
         g.mutate_random()
+        Net(g, [3, 50, 50], [10])
 
 
 if __name__ == '__main__':

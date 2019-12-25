@@ -35,7 +35,7 @@ Ideas:
 - Every gene has a detail to its weight. e+v of all weights, e+v in regions (e.g. col,row,blocks), all weights
   Higher detail -> higher penalty
 - Mutation chances change dynamically (What works?)
-(-) dilation
+(-) dilation, bias
 (-) Mutation exception/variance
     Same for the selection of what genes to mutate
 - Bessere Representation für Graph (Existiert Kante? Node by id?)
