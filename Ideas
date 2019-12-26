@@ -41,6 +41,7 @@ Ideas:
 - Bessere Representation für Graph (Existiert Kante? Node by id?)
 - mutate_to bei add_edge?
 - Bessere Visualisierung, Layerweise gerade verbinden
+- pool stride dial
 
 
 Genes:
