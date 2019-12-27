@@ -398,11 +398,11 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, log_learning_rate=None, genes_and_nodes=None):
+    def __init__(self, population, log_learning_rate=None, nodes_and_genes=None):
         self.population = population
         self.log_learning_rate = log_learning_rate or self.init_log_learning_rate()
 
-        [self.nodes, self.genes] = genes_and_nodes or self.init_genome()
+        [self.nodes, self.genes] = nodes_and_genes or self.init_genome()
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
     def __repr__(self):
@@ -579,36 +579,49 @@ class Genome:
 
 
 class Population:
+    """
+    A population of genomes to be evolved
+    -----
+    n               - population size
+    evaluate_genome - how to get a score from genome
+    genomes         - the current population of genomes
+    generation      - keeps track of the current generation
+    """
 
-    def __init__(self, n, evaluate_genome):
+    def __init__(self, n, evaluate_genome, parent_selection, elitism=2):
         self.evaluate_genome = evaluate_genome
+        self.parent_selection = parent_selection
         self.id_generator = itertools.count()
         # 0-5 is reserved
         [f() for f in [self.next_id]*5]
         self.genomes = [Genome(self) for _ in range(n)]
+        self.generation = 0
+
+        self.elitism = elitism
 
     def next_id(self):
         return next(self.id_generator)
 
     def evolve(self, generation):
-        scores = [(self.evaluate_genome(g), g) for g in self.genomes]
-        scores.sort(key=operator.itemgetter(0))
-        print()
-        print()
-        print('GENERATION', generation)
-        print()
-        for s, g in scores:
+        evaled_genomes = [(g, self.evaluate_genome(g)) for g in self.genomes]
+        evaled_genomes.sort(key=lambda x: x[1])
+
+        print('\n\nGENERATION %d\n' % self.generation)
+        for g, s in evaled_genomes:
             r = repr(g)
             if len(r) > 64:
                 r = r[:60] + '...' + r[-1:]
             print('{:64}:'.format(r), s)
-        print()
-        print()
-        self.genomes = [g for s, g in scores]
-        for i in range(len(self.genomes) // 4):
-            self.genomes[i] = Genome(self)
-        for i in range(len(self.genomes) // 4, len(self.genomes) * 3 // 4):
-            self.genomes[i].mutate_random()
+        print('\n')
+
+        elite_genomes = [g for g, s in evaled_genomes[:self.elitism]]
+        parents = self.parent_selection(evaled_genomes, k=self.n-self.elitism)
+        new_genomes = [self.crossover(p[0], p[1]) for p in parents]
+        self.genomes = elite_genomes + new_genomes
+        for genome in self.genomse:
+            genome.mutate_random()
+
+        self.generation += 1
 
 
 class Net(torch.nn.Module):
@@ -784,6 +797,36 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     return correct / total
 
 
+def cut_off_selection(evaled_genomes, k, survival_threshold=0.2):
+    n = len(evaled_genomes)
+    m = math.floor(survival_threshold * n)
+    parents = [g for g, s in evaled_genomes[:m]]
+    return [random.sample(parents, k=2) for _ in range(k)]
+
+
+def tournament_selection(evaled_genomes, k, tournament_size=6):
+    n = len(evaled_genomes)
+    tournament_size = max(1, min(n, tournament_size))
+    tournaments = [random.sample(range(n), k=tournament_size) for _ in range(k)]
+    return [evaled_genomes[min(t)][0] for t in tournaments]
+
+
+def fitness_proportionate_selection(evaled_genomes, k):
+    n = len(evaled_genomes)
+    parents = [g for g, s in evaled_genomes]
+    scores = [s for g, s in evaled_genomes]
+    scores = scores / sum(scores)
+    return [list(np.random.choice(parents, size=2, p=scores, replace=False)) for _ in range(k)]
+
+
+def fitness_proportionate_tournament_selection(evaled_genomes, k, tournament_size=3):
+    n = len(evaled_genomes)
+    tournament_size = max(1, min(n, tournament_size))
+    tournaments = [np.random.choice(evaled_genomes, k=tournament_size, replace=False) for _ in range(k)]
+    tournaments = [sorted(t, key=lambda x: x[1]) for t in tournaments]
+    return [t[0][0] for t in tournaments]
+
+
 def data_loader(torch_device):
     # set up datasets
     transform = torchvision.transforms.Compose([
@@ -821,9 +864,19 @@ def main():
     np.random.seed(seed)
 
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_test, data_train, input_size = data_loader(torch_device)
+    data_loader_test, data_loader_train, input_size = data_loader(torch_device)
 
-    p = Population(1, 1)
+    p = Population(n=100, elitism=2,
+                   evaluate_genome=functools.partial(
+                       evaluate_genome_on_data,
+                       torch_device=torch_device,
+                       data_loader_train=data_loader_train,
+                       data_loader_test=data_loader_test,
+                   ),
+                   parent_selection=functools.partial(
+                       fitness_proportionate_tournament_selection,
+                       tournament_size=3
+                   ))
     g = Genome(p)
     while True:
         print(g)

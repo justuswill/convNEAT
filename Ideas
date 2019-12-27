@@ -42,6 +42,7 @@ Ideas:
 - mutate_to bei add_edge?
 - Bessere Visualisierung, Layerweise gerade verbinden
 - pool stride dial
+- better structure seperate algorithm / initialization/ data
 
 
 Genes:
