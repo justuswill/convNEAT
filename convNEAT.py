@@ -797,34 +797,74 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     return correct / total
 
 
-def cut_off_selection(evaled_genomes, k, survival_threshold=0.2):
-    n = len(evaled_genomes)
-    m = math.floor(survival_threshold * n)
-    parents = [g for g, s in evaled_genomes[:m]]
+def cut_off_selection(evaluated_genomes, k, survival_threshold=0.2):
+    """
+    Cut off population at a threshold. At least two parents survive.
+    Couples are randomly sampled after the cut-off
+    """
+    n = len(evaluated_genomes)
+    m = min(2, math.floor(survival_threshold * n))
+    parents = [g for g, s in evaluated_genomes[:m]]
     return [random.sample(parents, k=2) for _ in range(k)]
 
 
-def tournament_selection(evaled_genomes, k, tournament_size=6):
-    n = len(evaled_genomes)
-    tournament_size = max(1, min(n, tournament_size))
+def tournament_selection(evaluated_genomes, k, tournament_size=6):
+    """
+    Choose the two best individuals in a random sample of the population with set size
+    """
+    n = len(evaluated_genomes)
+    tournament_size = max(2, min(n, tournament_size))
     tournaments = [random.sample(range(n), k=tournament_size) for _ in range(k)]
-    return [evaled_genomes[min(t)][0] for t in tournaments]
+    return [list(map(lambda i: evaluated_genomes[sorted(t)[i]][0], [0, 1])) for t in tournaments]
 
 
-def fitness_proportionate_selection(evaled_genomes, k):
-    n = len(evaled_genomes)
-    parents = [g for g, s in evaled_genomes]
-    scores = [s for g, s in evaled_genomes]
+def fitness_proportionate_selection(evaluated_genomes, k):
+    """
+    Sample random couples weighted by their score
+    """
+    n = len(evaluated_genomes)
+    parents = [g for g, s in evaluated_genomes]
+    scores = [s for g, s in evaluated_genomes]
     scores = scores / sum(scores)
     return [list(np.random.choice(parents, size=2, p=scores, replace=False)) for _ in range(k)]
 
 
-def fitness_proportionate_tournament_selection(evaled_genomes, k, tournament_size=3):
-    n = len(evaled_genomes)
-    tournament_size = max(1, min(n, tournament_size))
-    tournaments = [np.random.choice(evaled_genomes, k=tournament_size, replace=False) for _ in range(k)]
+def linear_ranking_selection(evaluated_genomes, k):
+    """
+    Only the rank determines how the sampling is weighted.
+    Chance of selection for the k-th of n individuals is 2k/(n(n-1))
+    """
+    n = len(evaluated_genomes)
+    parents = [g for g, s in evaluated_genomes]
+    scores = [s for g, s in evaluated_genomes]
+    ranks = np.argsort(scores)
+    return [list(np.random.choice(parents, size=2, p=ranks/sum(ranks), replace=False)) for _ in range(k)]
+
+
+def fitness_proportionate_tournament_selection(evaluated_genomes, k, tournament_size=3):
+    """
+    Tournament selection but sampling is weighted by the score
+    """
+    n = len(evaluated_genomes)
+    tournament_size = max(2, min(n, tournament_size))
+    tournaments = [np.random.choice(evaluated_genomes, k=tournament_size, replace=False) for _ in range(k)]
     tournaments = [sorted(t, key=lambda x: x[1]) for t in tournaments]
-    return [t[0][0] for t in tournaments]
+    return [[t[0][0], t[1][0]] for t in tournaments]
+
+
+def stochastic_universal_sampling(evaluated_genomes, k, selection_percentage=0.3):
+    """
+    Select via SUS and than sample random couples.
+    Does not avoid identical parents
+    """
+    n = len(evaluated_genomes)
+    m = min(2, math.floor(selection_percentage * n))
+    scores = [s for g, s in evaluated_genomes]
+    step = sum(scores)/m
+    start = random.uniform(0, step)
+    cum_scores = np.cumsum(scores)
+    parents = [evaluated_genomes[np.where(cum_scores > start + i*step)[0][0]][0] for i in range(m)]
+    return [random.sample(parents, k=2) for _ in range(k)]
 
 
 def data_loader(torch_device):
