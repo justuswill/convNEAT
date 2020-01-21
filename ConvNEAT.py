@@ -12,15 +12,19 @@ import torch
 import torchvision
 import logging
 
+from selection import cut_off_selection, tournament_selection, fitness_proportionate_selection,\
+    fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling
 
-# genetic components
+
 def weighted_choice(choices, weights):
     return random.choices(choices, weights=weights)[0]
+
 
 def random_choices(choices, chances):
     return list(np.array(choices)[np.random.rand(len(chances)) < chances])
 
 
+# genetic components
 class Gene:
     """
     Symbolizes a Edge in the Graph
@@ -59,7 +63,7 @@ class Gene:
         return weighted_choice(*self.mutate_to)(id, id_in, id_out)
 
     def copy(self, id, id_in, id_out):
-        pass
+        raise ValueError("Not intended to copy")
 
     def dissimilarity(self, other):
         return self != other
@@ -172,9 +176,9 @@ class KernelGene(Gene):
         out_height = ((in_height - (self.height - 1) + 2 * self.padding - 1) // self.stride) + 1
         return [out_depth, out_width, out_height]
 
-    def copy(self, id, id_in, id_out):
-        return KernelGene(id, id_in, id_out, size=[self.depth, self.width, self.height],
-                          stride=self.stride, padding=self.padding)
+    def copy(self, id=None, id_in=None, id_out=None):
+        return KernelGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
+                          size=[self.depth, self.width, self.height], stride=self.stride, padding=self.padding)
 
 
 class PoolGene(Gene):
@@ -265,9 +269,9 @@ class PoolGene(Gene):
         out_height = (in_height - (self.height - 1) + 2 * self.padding)
         return [out_depth, out_width, out_height]
 
-    def copy(self, id, id_in, id_out):
-        return PoolGene(id, id_in, id_out, size=[self.width, self.height],
-                        pooling=self.pooling, padding=self.padding)
+    def copy(self, id=None, id_in=None, id_out=None):
+        return PoolGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
+                        size=[self.width, self.height], pooling=self.pooling, padding=self.padding)
 
 
 class DenseGene(Gene):
@@ -320,8 +324,9 @@ class DenseGene(Gene):
 
         return [in_size[0], in_size[1], in_size[2] + self.size_change]
 
-    def copy(self, id, id_in, id_out):
-        return DenseGene(id, id_in, id_out, size_change=self.size_change, activation=self.activation)
+    def copy(self, id=None, id_in=None, id_out=None):
+        return DenseGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
+                         size_change=self.size_change, activation=self.activation)
 
 
 class Node:
@@ -384,6 +389,9 @@ class Node:
         self.target_size = out_size
         return [1, 1, int(np.prod(out_size))] if self.role == 'flatten' else out_size
 
+    def copy(self):
+        return Node(self.id, self.depth, merge=self.merge, role=self.role)
+
 
 class Genome:
     """
@@ -398,11 +406,11 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, log_learning_rate=None, genes_and_nodes=None):
+    def __init__(self, population, log_learning_rate=None, nodes_and_genes=None):
         self.population = population
         self.log_learning_rate = log_learning_rate or self.init_log_learning_rate()
 
-        [self.nodes, self.genes] = genes_and_nodes or self.init_genome()
+        self.nodes, self.genes = nodes_and_genes or self.init_genome()
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
     def __repr__(self):
@@ -426,7 +434,6 @@ class Genome:
         for node in self.nodes:
             nodes_by_id = {**nodes_by_id, **{node.id: node}}
         return [genes_by_id, nodes_by_id]
-
 
     def init_log_learning_rate(self):
         return random.normalvariate(-6, 2)
@@ -498,6 +505,7 @@ class Genome:
                                    (1, 1, 0.5, 0.1, 0.1, 0.7, 0.3))
         for mutate in mutations:
             mutate()
+        # TODO Ist das noch gültig
         return self
 
     def visualize(self, input_size=None, dbug=False):
@@ -517,10 +525,9 @@ class Genome:
                 node_color=node_colors, edge_color=edge_colors)
         nx.draw_networkx_edge_labels(G, pos=pos, edge_labels=edge_labels, ax=ax, font_size=8, alpha=0.9)
         if dbug:
-            nx.draw_networkx_labels(G, pos=pos, alpha=0.7,
-                                font_size=10, font_color="dimgrey", font_weight="bold")
+            nx.draw_networkx_labels(G, pos=pos, alpha=0.7, font_size=10, font_color="dimgrey", font_weight="bold")
             nx.draw_networkx_labels(G, pos={n: [p[0], p[1]+0.0065] for n, p in pos.items()}, labels=node_labels,
-                                font_size=7, font_color="dimgrey", font_weight="bold")
+                                    font_size=7, font_color="dimgrey", font_weight="bold")
         else:
             nx.draw_networkx_labels(G, pos=pos, labels=node_labels,
                                     font_size=7, font_color="dimgrey", font_weight="bold")
@@ -579,36 +586,53 @@ class Genome:
 
 
 class Population:
+    """
+    A population of genomes to be evolved
+    -----
+    n               - population size
+    evaluate_genome - how to get a score from genome
+    genomes         - the current population of genomes
+    generation      - keeps track of the current generation
+    """
 
-    def __init__(self, n, evaluate_genome):
+    def __init__(self, n, evaluate_genome, parent_selection, crossover, elitism_rate=0.05,):
+        # Evolution parameters
+        self.n = n
         self.evaluate_genome = evaluate_genome
+        self.parent_selection = parent_selection
+        self.crossover = crossover
+        self.elitism = math.floor(elitism_rate * n)
+
+        # Init Genomes
         self.id_generator = itertools.count()
         # 0-5 is reserved
         [f() for f in [self.next_id]*5]
         self.genomes = [Genome(self) for _ in range(n)]
+        self.generation = 0
 
     def next_id(self):
         return next(self.id_generator)
 
     def evolve(self, generation):
-        scores = [(self.evaluate_genome(g), g) for g in self.genomes]
-        scores.sort(key=operator.itemgetter(0))
-        print()
-        print()
-        print('GENERATION', generation)
-        print()
-        for s, g in scores:
+        evaluated_genomes = [(g, self.evaluate_genome(g)) for g in self.genomes]
+        evaluated_genomes.sort(key=lambda x: x[1], reverse=True)
+
+        print('\n\nGENERATION %d\n' % self.generation)
+        for g, s in evaluated_genomes:
             r = repr(g)
             if len(r) > 64:
                 r = r[:60] + '...' + r[-1:]
             print('{:64}:'.format(r), s)
-        print()
-        print()
-        self.genomes = [g for s, g in scores]
-        for i in range(len(self.genomes) // 4):
-            self.genomes[i] = Genome(self)
-        for i in range(len(self.genomes) // 4, len(self.genomes) * 3 // 4):
-            self.genomes[i].mutate_random()
+        print('\n')
+
+        elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
+        parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
+        new_genomes = [self.crossover(p[0], p[1]) for p in parents]
+        self.genomes = elite_genomes + new_genomes
+        for genome in self.genomse:
+            genome.mutate_random()
+
+        self.generation += 1
 
 
 class Net(torch.nn.Module):
@@ -784,6 +808,53 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     return correct / total
 
 
+def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_rate=0.2):
+    """
+    Input:
+    genome1: the more fit genome
+    genome2: the less fit genome
+    more_fit_crossover_rate: the rate at which genes only occurring in the more fit gene are used
+    less_fit_crossover_rate: -"-
+    -----
+    Combine the genome to get a child-genome.
+    Mutate the child genome.
+    """
+    population = genome1.population
+    child_genes = []
+    child_nodes = []
+
+    # Genes
+    ids_1, ids_2 = map(lambda x: set(x.genes_by_id.keys()), [genome1, genome2])
+    print(ids_1, ids_2)
+    for _id in ids_1 | ids_2:
+        if _id in ids_1:
+            if _id in ids_2:
+                child_genes += [genome1.genes_by_id[_id].copy()]
+            else:
+                gene = genome1.genes_by_id[_id].copy()
+                if random.random() > more_fit_crossover_rate:
+                    gene.enabled = False
+                child_genes += [gene]
+        else:
+            gene = genome2.genes_by_id[_id].copy()
+            if random.random() > less_fit_crossover_rate:
+                gene.enabled = False
+            child_genes += [gene]
+
+    # Nodes
+    node_ids_1, node_ids_2 = map(lambda x: set(x.nodes_by_id.keys()), [genome1, genome2])
+    for _id in node_ids_1 | node_ids_2:
+        if _id in node_ids_1:
+            child_nodes += [genome1.nodes_by_id[_id].copy()]
+        else:
+            child_nodes += [genome2.nodes_by_id[_id].copy()]
+
+    child_genome = Genome(population, log_learning_rate=genome1.log_learning_rate,
+                          nodes_and_genes=[child_nodes, child_genes])
+    # TODO Ist das noch gültig?
+    return child_genome.mutate_random()
+
+
 def data_loader(torch_device):
     # set up datasets
     transform = torchvision.transforms.Compose([
@@ -814,23 +885,40 @@ def data_loader(torch_device):
 
 def main():
     # manually seed all random number generators for reproducible results
-    seed = 1
+    seed = 3
     random.seed(seed)
     np.random.seed(seed)
     torch.random.manual_seed(seed)
-    np.random.seed(seed)
 
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_test, data_train, input_size = data_loader(torch_device)
+    data_loader_test, data_loader_train, input_size = data_loader(torch_device)
 
-    p = Population(1, 1)
-    g = Genome(p)
+    p = Population(n=100, elitism=2,
+                   evaluate_genome=functools.partial(
+                       evaluate_genome_on_data,
+                       torch_device=torch_device,
+                       data_loader_train=data_loader_train,
+                       data_loader_test=data_loader_test,
+                   ),
+                   parent_selection=functools.partial(
+                       fitness_proportionate_tournament_selection,
+                       tournament_size=3
+                   ),
+                   crossover=crossover)
+    g1 = Genome(p)
+    g2 = Genome(p)
     while True:
-        print(g)
-        g.visualize(input_size=input_size)
-        evaluate_genome_on_data(g, torch_device, data_test, data_train, input_size)
+        print(g1)
+        g1.visualize(input_size=input_size)
+        print(g2)
+        g2.visualize(input_size=input_size)
+        g3 = crossover(g1, g2)
+        print(g3)
+        g3.visualize(input_size=input_size)
+        # evaluate_genome_on_data(g, torch_device, data_test, data_train, input_size)
         logging.debug('Mutating')
-        [g.mutate_random() for _ in range(10)]
+        [g1.mutate_random() for _ in range(3)]
+        [g2.mutate_random() for _ in range(3)]
 
 
 if __name__ == '__main__':
