@@ -43,6 +43,8 @@ Ideas:
 - Bessere Visualisierung, Layerweise gerade verbinden
 - pool stride dial
 - better structure seperate algorithm / initialization/ data
+- checkpoints
+- kMeans und mse für abstand zu Punkten
 
 
 Genes:

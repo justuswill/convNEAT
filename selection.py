@@ -87,9 +87,9 @@ if __name__ == '__main__':
         out = ""
         for n in [2, 5, 10, 20]:
             k = math.floor(0.95 * n)
-            l = [[i, i] for i in range(n, 0, -1)]
+            l = [[i, i**(3/2)] for i in range(n, 0, -1)]
             scores = {i: 0 for i in range(1, n+1)}
-            for j in range(1000):
+            for j in range(5000):
                 p = f(l, k=k)
                 for c in p:
                     for t in c:
