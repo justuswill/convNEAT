@@ -610,13 +610,33 @@ class Genome:
                 node.size = node.output_size(in_sizes)
                 outputs_by_id[node.id] = node.size
 
-    def dissimilarity(self, other):
-        dist = np.array([self.height - other.height, self.width - other.width,
-                         self.stride - other.stride, self.padding - other.padding,
-                         self.pooling != other.pooling])
-        importance = np.array([0.2, 0.2, 0.1, 0.1, 0.4])
-        relevance = np.array([5, 5, 3, 3, 0.01])
-        return np.sum(limited_growth(dist, importance, relevance))
+    def dissimilarity(self, other, c=[5, 5, 5, 1, 5]):
+        """
+        The distance/dissimilarity of two genomes, similar to NEAT
+        dist = (c1*S + c2*D + c3*E)/N + c4*T + c5*K
+        where
+        S sum of difference in same genes
+        D number of disjoint genes
+        E number of excess genes
+        N length of larger gene
+        T difference in optimizer + hyperparameters
+        K mean of difference in same nodes
+        """
+        genes_1, genes_2 = map(lambda x: x.genes_by_id, [self, other])
+        ids_1, ids_2 = map(lambda x: set(x.keys()), [genes_1, genes_2])
+        nodes_1, nodes_2 = map(lambda x: x.nodes_by_id, [self, other])
+        node_ids = set(nodes_1.keys()) & set(nodes_2.keys())
+
+        N = max(len(ids_1), len(ids_2))
+        excess_start = max(ids_1 | ids_2) + 1
+
+        S = sum([genes_1[_id].dissimilarity(genes_2[_id]) for _id in ids_1 & ids_2])
+        D = len([_id for _id in ids_1 ^ ids_2 if _id < excess_start])
+        E = len(ids_1 ^ ids_2) - D
+        T = limited_growth(math.abs(self.log_learning_rate - other.log_learning_rate), 1, 5)
+        K = sum([nodes_1[_id].dissimilarity(nodes_2[_id]) for _id in node_ids]) / len(node_ids)
+
+        return (c[1] * S + c[2] * D + c[3] * E) / N + c[4] * T + c[5] * K
 
 
 class Population:
@@ -857,7 +877,6 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
 
     # Genes
     ids_1, ids_2 = map(lambda x: set(x.genes_by_id.keys()), [genome1, genome2])
-    print(ids_1, ids_2)
     for _id in ids_1 | ids_2:
         if _id in ids_1:
             if _id in ids_2:
