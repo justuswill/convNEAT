@@ -633,10 +633,10 @@ class Genome:
         S = sum([genes_1[_id].dissimilarity(genes_2[_id]) for _id in ids_1 & ids_2])
         D = len([_id for _id in ids_1 ^ ids_2 if _id < excess_start])
         E = len(ids_1 ^ ids_2) - D
-        T = limited_growth(math.abs(self.log_learning_rate - other.log_learning_rate), 1, 5)
+        T = limited_growth(np.abs(self.log_learning_rate - other.log_learning_rate), 1, 5)
         K = sum([nodes_1[_id].dissimilarity(nodes_2[_id]) for _id in node_ids]) / len(node_ids)
 
-        return (c[1] * S + c[2] * D + c[3] * E) / N + c[4] * T + c[5] * K
+        return (c[0] * S + c[1] * D + c[2] * E) / N + c[3] * T + c[4] * K
 
 
 class Population:
@@ -956,20 +956,22 @@ def main():
                        tournament_size=3
                    ),
                    crossover=crossover)
-    g1 = Genome(p)
-    g2 = Genome(p)
-    while True:
-        print(g1)
-        g1.visualize(input_size=input_size)
-        print(g2)
-        g2.visualize(input_size=input_size)
-        g3 = crossover(g1, g2)
-        print(g3)
-        g3.visualize(input_size=input_size)
-        # evaluate_genome_on_data(g, torch_device, data_test, data_train, input_size)
-        logging.debug('Mutating')
-        [g1.mutate_random() for _ in range(3)]
-        [g2.mutate_random() for _ in range(3)]
+
+    n = 3
+    gen = [Genome(p) for _ in range(n)]
+    for _ in range(5):
+        [g.mutate_random() for g in gen]
+    [g.visualize(input_size=input_size) for g in gen]
+    M = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            M[i, j] = int(100 * gen[i].dissimilarity(gen[j])) / 100
+    print(M)
+    for i in range(n):
+        for j in range(n):
+            for k in range(n):
+                if M[i,j] + M[j,k] < M[i,k]:
+                    print("no metric")
 
 
 if __name__ == '__main__':
