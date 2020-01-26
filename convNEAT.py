@@ -1,16 +1,14 @@
 import functools
 import itertools
-import operator
 import random
 import numpy as np
 import math
-import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-
+import logging
+from sklearn.cluster import AffinityPropagation, SpectralClustering
 import torch
 import torchvision
-import logging
 
 from selection import cut_off_selection, tournament_selection, fitness_proportionate_selection,\
     fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling
@@ -667,7 +665,8 @@ class Population:
     def next_id(self):
         return next(self.id_generator)
 
-    def evolve(self, generation):
+    def evolve(self):
+        """
         evaluated_genomes = [(g, self.evaluate_genome(g)) for g in self.genomes]
         evaluated_genomes.sort(key=lambda x: x[1], reverse=True)
 
@@ -678,13 +677,52 @@ class Population:
                 r = r[:60] + '...' + r[-1:]
             print('{:64}:'.format(r), s)
         print('\n')
+        """
 
+        # Clustering
+        distances = np.zeros((self.n, self.n))
+        for i in range(self.n):
+            for j in range(self.n):
+                distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
+
+        beta = 10
+        similarity = np.exp(-beta * distances / distances.std())
+        clustering = SpectralClustering(n_clusters=5, affinity='precomputed').fit(similarity)
+        print(clustering.labels_)
+        ids = list(range(2, 8))
+        labels = [SpectralClustering(n_clusters=i, affinity='precomputed').fit(similarity).labels_ for i in ids]
+        scores = [np.sum([np.mean(distances[np.ix_(lab == i, lab == i)]) for i in range(n)])/n for n, lab in zip(ids, labels)]
+        plt.plot(ids, scores)
+        plt.show()
+
+        '''
+        # Affinity Clustering
+        clustering = AffinityPropagation(affinity='precomputed', preference=-10).fit(distances)
+        print(clustering.labels_)
+        print(len(clustering.cluster_centers_indices_))
+        '''
+
+        i = itertools.count()
+        self.genomes = sorted(self.genomes, key=lambda x: clustering.labels_[next(i)])
+
+        # Clustering
+        distances = np.zeros((self.n, self.n))
+        for i in range(self.n):
+            for j in range(self.n):
+                distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
+        plt.imshow(distances)
+        plt.show()
+
+        [g.mutate_random() for g in self.genomes]
+
+        '''
         elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
         parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
         new_genomes = [self.crossover(p[0], p[1]) for p in parents]
         self.genomes = elite_genomes + new_genomes
 
         self.generation += 1
+        '''
 
 
 class Net(torch.nn.Module):
@@ -956,6 +994,8 @@ def main():
                        tournament_size=3
                    ),
                    crossover=crossover)
+    while True:
+        p.evolve()
 
     n = 3
     gen = [Genome(p) for _ in range(n)]
