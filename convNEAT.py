@@ -7,6 +7,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import logging
 from sklearn.cluster import AffinityPropagation, SpectralClustering
+from KMedoids import KMedoids
 import torch
 import torchvision
 
@@ -25,6 +26,24 @@ def random_choices(choices, chances):
 def limited_growth(t, cap, relevance):
     k = 2.2/relevance
     return cap*(1-np.exp(-k*t))
+
+
+def cluster_score(distances, labels):
+    """
+    Computes the score of a k-clustering by finding the best cluster-center xi for each cluster i
+    and than calculating 1/k * sum(i=0, k, sum(j in cluster i, dist(j, xi)^2))
+
+    Input:
+    distance metric for the n points
+    labels for the n points
+    """
+    k = max(labels)
+    score = 0
+    for i in range(k):
+        in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
+        in_cluster_scores = np.sum(in_cluster_distances**2, axis=1)
+        score += np.min(in_cluster_scores)
+    return score/k
 
 
 # genetic components
@@ -685,15 +704,20 @@ class Population:
             for j in range(self.n):
                 distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
 
+        '''
         beta = 10
         similarity = np.exp(-beta * distances / distances.std())
         clustering = SpectralClustering(n_clusters=5, affinity='precomputed').fit(similarity)
         print(clustering.labels_)
-        ids = list(range(2, 8))
-        labels = [SpectralClustering(n_clusters=i, affinity='precomputed').fit(similarity).labels_ for i in ids]
-        scores = [np.sum([np.mean(distances[np.ix_(lab == i, lab == i)]) for i in range(n)])/n for n, lab in zip(ids, labels)]
-        plt.plot(ids, scores)
-        plt.show()
+        '''
+
+        # K Medoids
+        clustering = KMedoids(n_clusters=4).fit(distances)
+        print(clustering.labels_)
+        print(clustering.medoid_indices_)
+        print(clustering.inertia_)
+        print(cluster_score(distances, clustering.labels_))
+
 
         '''
         # Affinity Clustering
@@ -701,6 +725,14 @@ class Population:
         print(clustering.labels_)
         print(len(clustering.cluster_centers_indices_))
         '''
+
+        ids = list(range(2, 8))
+        labels = [KMedoids(n_clusters=i).fit(distances).labels_ for i in ids]
+        inertia = [KMedoids(n_clusters=i).fit(distances).inertia_ for i in ids]
+        plt.plot(ids, list(map(lambda x: cluster_score(distances, x), labels)))
+        plt.show()
+        plt.plot(ids, inertia)
+        plt.show()
 
         i = itertools.count()
         self.genomes = sorted(self.genomes, key=lambda x: clustering.labels_[next(i)])
