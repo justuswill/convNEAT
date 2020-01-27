@@ -37,7 +37,7 @@ def cluster_score(distances, labels):
     distance metric for the n points
     labels for the n points
     """
-    k = max(labels)
+    k = max(labels) + 1
     score = 0
     for i in range(k):
         in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
@@ -673,6 +673,7 @@ class Population:
         self.parent_selection = parent_selection
         self.crossover = crossover
         self.elitism = math.floor(elitism_rate * n)
+        self.species = 1
 
         # Init Genomes
         self.id_generator = itertools.count()
@@ -685,7 +686,6 @@ class Population:
         return next(self.id_generator)
 
     def evolve(self):
-        """
         evaluated_genomes = [(g, self.evaluate_genome(g)) for g in self.genomes]
         evaluated_genomes.sort(key=lambda x: x[1], reverse=True)
 
@@ -696,67 +696,35 @@ class Population:
                 r = r[:60] + '...' + r[-1:]
             print('{:64}:'.format(r), s)
         print('\n')
-        """
 
-        # Clustering
+        # Clustering with K-Medodis
         distances = np.zeros((self.n, self.n))
         for i in range(self.n):
             for j in range(self.n):
                 distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
 
-        '''
-        beta = 10
-        similarity = np.exp(-beta * distances / distances.std())
-        clustering = SpectralClustering(n_clusters=5, affinity='precomputed').fit(similarity)
-        print(clustering.labels_)
-        '''
+        clustering = KMedoids(n_clusters=4, metric='precomputed').fit(distances)
 
-        # K Medoids
-        clustering = KMedoids(n_clusters=4).fit(distances)
-        print(clustering.labels_)
-        print(clustering.medoid_indices_)
-        print(clustering.inertia_)
-        print(cluster_score(distances, clustering.labels_))
-
-
-        '''
-        # Affinity Clustering
-        clustering = AffinityPropagation(affinity='precomputed', preference=-10).fit(distances)
-        print(clustering.labels_)
-        print(len(clustering.cluster_centers_indices_))
-        '''
-
-        ids = list(range(2, 8))
-        labels = [KMedoids(n_clusters=i).fit(distances).labels_ for i in ids]
-        inertia = [KMedoids(n_clusters=i).fit(distances).inertia_ for i in ids]
+        # Clustering Elbow Curve
+        ids = list(range(1, 10))
+        labels = [KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids]
         plt.plot(ids, list(map(lambda x: cluster_score(distances, x), labels)))
         plt.show()
-        plt.plot(ids, inertia)
+
+        # Plot distance matrix after clustering
+        ind = np.argsort(clustering.labels_)
+        plt.imshow(distances[np.ix_(ind, ind)])
         plt.show()
 
-        i = itertools.count()
-        self.genomes = sorted(self.genomes, key=lambda x: clustering.labels_[next(i)])
-
-        # Clustering
-        distances = np.zeros((self.n, self.n))
-        for i in range(self.n):
-            for j in range(self.n):
-                distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
-        plt.imshow(distances)
-        plt.show()
-
-        [g.mutate_random() for g in self.genomes]
-
-        '''
         elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
         parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
         new_genomes = [self.crossover(p[0], p[1]) for p in parents]
         self.genomes = elite_genomes + new_genomes
 
         self.generation += 1
-        '''
 
 
+# Force outputsize and check dense layer merging
 class Net(torch.nn.Module):
 
     def __init__(self, genome, input_size):
@@ -1014,36 +982,22 @@ def main():
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     data_loader_test, data_loader_train, input_size = data_loader(torch_device)
 
+    print('\n\nInitializing population\n')
     p = Population(n=100, elitism_rate=2,
                    evaluate_genome=functools.partial(
                        evaluate_genome_on_data,
                        torch_device=torch_device,
                        data_loader_train=data_loader_train,
                        data_loader_test=data_loader_test,
+                       input_size=input_size
                    ),
                    parent_selection=functools.partial(
                        fitness_proportionate_tournament_selection,
                        tournament_size=3
                    ),
                    crossover=crossover)
-    while True:
+    for _ in range(10):
         p.evolve()
-
-    n = 3
-    gen = [Genome(p) for _ in range(n)]
-    for _ in range(5):
-        [g.mutate_random() for g in gen]
-    [g.visualize(input_size=input_size) for g in gen]
-    M = np.zeros((n, n))
-    for i in range(n):
-        for j in range(n):
-            M[i, j] = int(100 * gen[i].dissimilarity(gen[j])) / 100
-    print(M)
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                if M[i,j] + M[j,k] < M[i,k]:
-                    print("no metric")
 
 
 if __name__ == '__main__':
