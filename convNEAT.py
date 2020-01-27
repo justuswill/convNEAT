@@ -666,60 +666,95 @@ class Population:
     generation      - keeps track of the current generation
     """
 
-    def __init__(self, n, evaluate_genome, parent_selection, crossover, elitism_rate=0.05,):
+    def __init__(self, n, evaluate_genome, parent_selection, crossover, elitism_rate=0.05):
         # Evolution parameters
         self.n = n
         self.evaluate_genome = evaluate_genome
         self.parent_selection = parent_selection
         self.crossover = crossover
         self.elitism = math.floor(elitism_rate * n)
-        self.species = 1
 
         # Init Genomes
         self.id_generator = itertools.count()
         # 0-5 is reserved
         [f() for f in [self.next_id]*5]
-        self.genomes = [Genome(self) for _ in range(n)]
-        self.generation = 0
+
+        # Begin with only one species
+        self.number_of_species = 1
+        self.species = {0: [Genome(self) for _ in range(n)]}
+        self.generation = 1
 
     def next_id(self):
         return next(self.id_generator)
 
-    def evolve(self):
-        evaluated_genomes = [(g, self.evaluate_genome(g)) for g in self.genomes]
-        evaluated_genomes.sort(key=lambda x: x[1], reverse=True)
+    def cluster(self):
+        """
+        Cluster the genomes with K_Medoids-Clustering
+        Change the number of species if needed (-2 .. +2)
+        The number of cluster decreases if the score of k-1 is <15% worse
+        The number of cluster decreases if the score of k+1 is >30% worse
+        """
+        k = self.number_of_species
+        n = self.n
+        all_genomes = [g for genomes in self.species.values() for g in genomes]
 
-        print('\n\nGENERATION %d\n' % self.generation)
-        for g, s in evaluated_genomes:
-            r = repr(g)
-            if len(r) > 64:
-                r = r[:60] + '...' + r[-1:]
-            print('{:64}:'.format(r), s)
-        print('\n')
+        # Distance matrix
+        distances = np.zeros((n, n))
+        for i in range(n):
+            for j in range(n):
+                distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
-        # Clustering with K-Medodis
-        distances = np.zeros((self.n, self.n))
-        for i in range(self.n):
-            for j in range(self.n):
-                distances[i, j] = self.genomes[i].dissimilarity(self.genomes[j])
-
-        clustering = KMedoids(n_clusters=4, metric='precomputed').fit(distances)
-
-        # Clustering Elbow Curve
-        ids = list(range(1, 10))
-        labels = [KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids]
-        plt.plot(ids, list(map(lambda x: cluster_score(distances, x), labels)))
+        # Get performance of K-Medodis for some # of clusters near k
+        ids_to_check = list(range(max(1, k - 2), min(n, k + 3)))
+        all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
+        scores = {i: cluster_score(distances, lab) for i, lab in all_labels.items()}
+        plt.plot(ids_to_check, scores.values())
         plt.show()
 
+        # Change number of clusters
+        while k + 1 in ids_to_check and scores[k + 1] > 1.3 * scores[k]:
+            k += 1
+        while k - 1 in ids_to_check and scores[k - 1] < 0.85 * scores[k]:
+            k -= 1
+
+        # Save new Clustering
+        self.number_of_species = k
+        labels = all_labels[k]
+        self.species = {i: [] for i in range(k)}
+        for i, g in enumerate(all_genomes):
+            self.species[labels[i]] += [g]
+
         # Plot distance matrix after clustering
-        ind = np.argsort(clustering.labels_)
+        ind = np.argsort(labels)
         plt.imshow(distances[np.ix_(ind, ind)])
         plt.show()
 
-        elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
-        parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
-        new_genomes = [self.crossover(p[0], p[1]) for p in parents]
-        self.genomes = elite_genomes + new_genomes
+    def evolve(self):
+        """
+        Group the genomes to species and evaluate them on training data
+        Generate the next generation with selection, crossover and mutation
+        """
+        self.cluster()
+
+        evaluated_genomes_by_species = {species: [(g, self.evaluate_genome(g)) for g in genomes].
+                                        sort(key=lambda g: g[1], reverse=True)
+                                        for species, genomes in self.species}
+
+        print('\n\nGENERATION %d\n' % self.generation)
+        for species, evaluated_genomes in evaluated_genomes_by_species.items():
+            print('Species %d:\n' % species)
+            for g, s in evaluated_genomes:
+                r = repr(g)
+                if len(r) > 64:
+                    r = r[:60] + '...' + r[-1:]
+                print('{:64}:'.format(r), s)
+            print('\n')
+
+        for sp, evaluated_genomes in evaluated_genomes_by_species.items():
+            elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
+            parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
+            new_genomes = [self.crossover(p[0], p[1]) for p in parents]
+            self.species[sp] = elite_genomes + new_genomes
 
         self.generation += 1
 
