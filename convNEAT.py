@@ -28,24 +28,6 @@ def limited_growth(t, cap, relevance):
     return cap*(1-np.exp(-k*t))
 
 
-def cluster_score(distances, labels):
-    """
-    Computes the score of a k-clustering by finding the best cluster-center xi for each cluster i
-    and than calculating 1/k * sum(i=0, k, sum(j in cluster i, dist(j, xi)^2))
-
-    Input:
-    distance metric for the n points
-    labels for the n points
-    """
-    k = max(labels) + 1
-    score = 0
-    for i in range(k):
-        in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
-        in_cluster_scores = np.sum(in_cluster_distances**2, axis=1)
-        score += np.min(in_cluster_scores)
-    return score/k
-
-
 # genetic components
 class Gene:
     """
@@ -687,12 +669,17 @@ class Population:
     def next_id(self):
         return next(self.id_generator)
 
-    def cluster(self):
+    def cluster(self, relative=False):
         """
         Cluster the genomes with K_Medoids-Clustering
         Change the number of species if needed (-2 .. +2)
-        The number of cluster decreases if the score of k-1 is <15% worse
-        The number of cluster decreases if the score of k+1 is >30% worse
+
+        #absolute clustering
+        The number of clusters is the minimum needed to achieve a score of <15
+
+        # relative clustering
+        The number of cluster decreases if the score of k-1 is higher by <20%
+        The number of cluster decreases if the score of k+1 is smaller by >50%
         """
         k = self.number_of_species
         n = self.n
@@ -707,15 +694,25 @@ class Population:
         # Get performance of K-Medodis for some # of clusters near k
         ids_to_check = list(range(max(1, k - 2), min(n, k + 3)))
         all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
-        scores = {i: cluster_score(distances, lab) for i, lab in all_labels.items()}
-        plt.plot(ids_to_check, scores.values())
+        scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
+        plt.plot(ids_to_check, list(scores.values()))
         plt.show()
 
-        # Change number of clusters
-        while k + 1 in ids_to_check and scores[k + 1] > 1.3 * scores[k]:
-            k += 1
-        while k - 1 in ids_to_check and scores[k - 1] < 0.85 * scores[k]:
-            k -= 1
+        if relative:
+            # Change number of clusters
+            while k + 1 in ids_to_check and scores[k + 1] < 0.5 * scores[k]:
+                print("number of clusters increased by one")
+                k += 1
+            while k - 1 in ids_to_check and scores[k - 1] < 1.20 * scores[k]:
+                print("number of clusters increased by one")
+                k -= 1
+        else:
+            while k + 1 in ids_to_check and scores[k] >= 15:
+                print("number of clusters increased by one")
+                k += 1
+            while k - 1 in ids_to_check and scores[k - 1] < 15:
+                print("number of clusters increased by one")
+                k -= 1
 
         # Save new Clustering
         self.number_of_species = k
@@ -729,20 +726,38 @@ class Population:
         plt.imshow(distances[np.ix_(ind, ind)])
         plt.show()
 
+    def cluster_score(self, distances, labels):
+        """
+        Computes the score of a k-clustering by finding the best cluster-center xi for each cluster i
+        and than calculating 1/k * sum(i=0, k, sum(j in cluster i, dist(j, xi)^2))
+        normalized by number of genomes in the population
+
+        Input:
+        distance metric for the n points
+        labels for the n points
+        """
+        k = max(labels) + 1
+        score = 0
+        for i in range(k):
+            in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
+            in_cluster_scores = np.sum(in_cluster_distances ** 2, axis=1)
+            score += np.min(in_cluster_scores)
+        return score / (k*self.n)
+
     def evolve(self):
         """
         Group the genomes to species and evaluate them on training data
         Generate the next generation with selection, crossover and mutation
         """
         self.cluster()
-
-        evaluated_genomes_by_species = {species: [(g, self.evaluate_genome(g)) for g in genomes].
-                                        sort(key=lambda g: g[1], reverse=True)
-                                        for species, genomes in self.species}
+        print(self.species)
+        evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g)) for g in genomes],
+                                                        key=lambda g: g[1], reverse=True)
+                                        for species, genomes in self.species.items()}
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
-            print('Species %d:\n' % species)
+            print('Species %d with %d members:\n' % (species, len(evaluated_genomes)))
             for g, s in evaluated_genomes:
                 r = repr(g)
                 if len(r) > 64:
@@ -835,7 +850,7 @@ class Net(torch.nn.Module):
             self.modules_by_id[node.id] = []
             if node.merge in ['upsample', 'downsample', 'avgsample']:
                 self.modules_by_id[node.id] += [lambda x, size=node.target_size:
-                    torch.nn.functional.interpolate(x, size=[size[1], size[2]], mode='bilinear')]
+                    torch.nn.functional.interpolate(x, size=[size[1], size[2]], align_corners=False, mode='bilinear')]
             elif node.merge == 'padding':
                 self.modules_by_id[node.id] += [lambda x, size=node.target_size:
                     torch.nn.ZeroPad2d([math.floor((size[2] - x.shape[3])/2), math.ceil((size[2] - x.shape[3])/2),
@@ -1018,7 +1033,7 @@ def main():
     data_loader_test, data_loader_train, input_size = data_loader(torch_device)
 
     print('\n\nInitializing population\n')
-    p = Population(n=100, elitism_rate=2,
+    p = Population(n=20, elitism_rate=2,
                    evaluate_genome=functools.partial(
                        evaluate_genome_on_data,
                        torch_device=torch_device,
