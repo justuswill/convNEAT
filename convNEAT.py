@@ -1,5 +1,8 @@
 import functools
 import itertools
+import os
+import pickle
+import time
 import random
 import numpy as np
 import math
@@ -32,9 +35,9 @@ def limited_growth(t, cap, relevance):
 class Gene:
     """
     Symbolizes a Edge in the Graph
-    Is also used in itialization.
+    Is also used in initialization.
     Specify what can be created after this in the split_edge mutation
-    (or to what it will be changed if its a initialized edge)
+    (or to what it will be changed if its a initializing edge)
     """
 
     def __init__(self, id, id_in, id_out, mutate_to=None):
@@ -51,6 +54,12 @@ class Gene:
 
     def short_repr(self):
         return ''
+
+    def save(self):
+        pass
+
+    def load(self, save):
+        return self
 
     def init_mutate_to(self):
         return [[KernelGene, DenseGene], [1, 1]]
@@ -98,6 +107,14 @@ class KernelGene(Gene):
 
     def short_repr(self):
         return '%dx%d' % (self.width, self.height)
+
+    def save(self):
+        return [self.width, self.height, self.stride, self.padding, self.depth_size_change, self.depth_mult,
+                self.enabled]
+
+    def load(self, save):
+        self.width, self.height, self.stride, self.padding, self.depth_size_change, self.depth_mult, self.enabled = save
+        return self
 
     def init_width(self):
         return random.randrange(3, 6)
@@ -212,6 +229,13 @@ class PoolGene(Gene):
     def short_repr(self):
         return self.pooling
 
+    def save(self):
+        return [self.pooling, self.width, self.height, self.stride, self.padding, self.enabled]
+
+    def load(self, save):
+        self.pooling, self.width, self.height, self.stride, self.padding, self.enabled = save
+        return self
+
     def init_pooling(self):
         return random.choice(self.possible_pooling)
 
@@ -309,6 +333,13 @@ class DenseGene(Gene):
         return (r[:-1] + 'size_change=%+d, activation=%s' %
                 (self.size_change, self.activation) + r[-1:])
 
+    def save(self):
+        return [self.size_change, self.activation, self.enabled]
+
+    def load(self, save):
+        self.size_change, self.activation, self.enabled = save
+        return self
+
     def init_size_change(self):
         return random.choice(list(range(-10, -4)) + list(range(5, 11)))
 
@@ -379,10 +410,17 @@ class Node:
 
     def __repr__(self):
         return '<Node | ID = %d, depth=%.2f, merge=%s%s>' % (self.id, self.depth, self.merge,
-                                                             ', size=%s' % self.size or '')
+                                                             ', size=%s' % str(self.size) or '')
 
     def short_repr(self):
         return '' if self.size is None else '%dx%dx%d' % (self.size[0], self.size[1], self.size[2])
+
+    def save(self):
+        return [self.role, self.merge, self.size, self.target_size]
+
+    def load(self, save):
+        self.role, self.merge, self.size, self.target_size = save
+        return self
 
     def init_merge(self):
         return random.choice(self.possible_merges)
@@ -441,7 +479,7 @@ class Genome:
     def __repr__(self):
         r = super().__repr__()
         return (r[:-1] + ' | learning_rate=%.4f, nodes=%s, genes=%s' %
-                (self.log_learning_rate, self.nodes, self.genes) + r[-1:])
+                (self.log_learning_rate, self.nodes, [gene for gene in self.genes if gene.enabled]) + r[-1:])
 
     def init_genome(self):
         return [[Node(0, 0, role='input'), Node(1, 1, role='flatten'), Node(2, 2, role='output')],
@@ -450,6 +488,17 @@ class Genome:
 
     def next_id(self):
         return self.population.next_id()
+
+    def save(self):
+        return [self.log_learning_rate, [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
+                [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes]]
+
+    def load(self, save):
+        self.log_learning_rate, saved_nodes, saved_genes = save
+        self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
+        self.genes = [g[0](g[1], g[2], g[3]).load(g[4]) for g in saved_genes]
+        print(self)
+        self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
     def dicts_by_id(self):
         genes_by_id = dict()
@@ -478,11 +527,40 @@ class Genome:
             if mutate[i]:
                 node.mutate_random()
 
-    def disable_edge(self):
-        # TODO Erreichbar
+    def dps(self, id_s, id_t, pre=None):
+        # depth first search in feed-forward net
+        if id_s == id_t:
+            return True
+        neig = [gene.id_out for gene in self.genes if gene.id_in == id_s]
+        if len(neig) == 0:
+            return False
+
+        for p in neig:
+            if self.dps(p, id_t, pre=id_s):
+                return True
+        if pre is None:
+            raise ValueError('No path through net in genome %s' % self.__repr__())
+        return False
+
+    def disable_edge(self, gene):
+        """
+        Tries to disable a edge
+        Does nothing if no other connection to output exists.
+        Returns whether deletion was successful
+        """
+        gene.enabled = False
+        if self.dps(0, 2) is False:
+            gene.enabled = True
+            return False
+        return True
+
+    def mutate_disable_edge(self, tries=2):
         enabled = [gene for gene in self.genes if gene.enabled]
         if len(enabled) > 0:
-            random.choice(enabled).enabled = False
+            while tries > 0:
+                if self.disable_edge(random.choice(enabled)):
+                    return
+                tries -= 1
 
     def enable_edge(self):
         disabled = [gene for gene in self.genes if not gene.enabled]
@@ -526,14 +604,13 @@ class Genome:
     def mutate_random(self):
         mutations = random_choices((lambda: self.mutate_genes(0.5), lambda: self.mutate_nodes(0.2),
                                     self.mutate_log_learning_rate,
-                                    self.disable_edge, self.enable_edge, self.split_edge, self.add_edge),
+                                    self.mutate_disable_edge, self.enable_edge, self.split_edge, self.add_edge),
                                    (1, 1, 0.5, 0.1, 0.1, 0.7, 0.3))
         for mutate in mutations:
             mutate()
-        # TODO Ist das noch gültig
         return self
 
-    def visualize(self, input_size=None, dbug=False):
+    def visualize(self, input_size=None, dbug=False, ax=None):
         self.set_sizes(input_size)
         edgelist = ['%d %d {\'class\':\'%s\'}' % (e.id_in, e.id_out, str(type(e)).split('.')[-1][:-2])
                     for e in self.genes if e.enabled]
@@ -545,18 +622,28 @@ class Genome:
         edge_labels = {(str(e.id_in), str(e.id_out)): e.short_repr() for e in self.genes if e.enabled}
         node_labels = {str(n.id): n.short_repr() for n in self.nodes}
         pos = self.graph_positioning()
-        fig, ax = plt.subplots()
-        nx.draw(G, pos=pos, ax=ax, node_size=300, node_shape="s", linewidths=4, width=2,
+
+        # if ax specified just update
+        show = False
+        print(ax)
+        if ax is None:
+            show = True
+            fig, ax = plt.subplots()
+
+        nx.draw(G, ax=ax, pos=pos, node_size=300, node_shape="s", linewidths=4, width=2,
                 node_color=node_colors, edge_color=edge_colors)
-        nx.draw_networkx_edge_labels(G, pos=pos, edge_labels=edge_labels, ax=ax, font_size=8, alpha=0.9)
+        nx.draw_networkx_edge_labels(G, ax=ax, pos=pos, edge_labels=edge_labels, font_size=8, alpha=0.9)
         if dbug:
-            nx.draw_networkx_labels(G, pos=pos, alpha=0.7, font_size=10, font_color="dimgrey", font_weight="bold")
-            nx.draw_networkx_labels(G, pos={n: [p[0], p[1]+0.0065] for n, p in pos.items()}, labels=node_labels,
+            nx.draw_networkx_labels(G, ax=ax, pos=pos, alpha=0.7, font_size=10, font_color="dimgrey", font_weight="bold")
+            nx.draw_networkx_labels(G, ax=ax, pos={n: [p[0], p[1]+0.0065] for n, p in pos.items()}, labels=node_labels,
                                     font_size=7, font_color="dimgrey", font_weight="bold")
         else:
-            nx.draw_networkx_labels(G, pos=pos, labels=node_labels,
+            nx.draw_networkx_labels(G, ax=ax, pos=pos, labels=node_labels,
                                     font_size=7, font_color="dimgrey", font_weight="bold")
-        plt.show()
+        if show is True:
+            plt.show()
+        else:
+            plt.show(block=False)
 
     # Groups nodes by feed-forward layers
     def group_by(self):
@@ -648,13 +735,18 @@ class Population:
     generation      - keeps track of the current generation
     """
 
-    def __init__(self, n, evaluate_genome, parent_selection, crossover, elitism_rate=0.05):
+    def __init__(self, n, evaluate_genome, parent_selection, crossover, name=None, elitism_rate=0.05, load=None, ax=None):
         # Evolution parameters
         self.n = n
         self.evaluate_genome = evaluate_genome
         self.parent_selection = parent_selection
         self.crossover = crossover
-        self.elitism = math.floor(elitism_rate * n)
+        self.elitism_rate = elitism_rate
+
+        # Load instead
+        if load is not None:
+            self.load_checkpoint(*load)
+        self.ax = ax
 
         # Init Genomes
         self.id_generator = itertools.count()
@@ -666,8 +758,33 @@ class Population:
         self.species = {0: [Genome(self) for _ in range(n)]}
         self.generation = 1
 
+        self.checkpoint_name = name or time.strftime("%d.%m-%H:%M")
+
     def next_id(self):
         return next(self.id_generator)
+
+    def save_checkpoint(self):
+        save = [self.n, self.elitism_rate, self.id_generator, self.number_of_species,
+                self.generation, self.checkpoint_name,
+                {species: [(genome.__class__, genome.save()) for genome in genomes]
+                 for species, genomes in self.species.items()}]
+
+        _dir = os.path.join('checkpoints', self.checkpoint_name)
+        if not os.path.exists(_dir):
+            os.makedirs(_dir)
+
+        with open(os.path.join(_dir, "%02d.cp" % self.generation), "wb") as c:
+            pickle.dump(save, c)
+
+    def load_checkpoint(self, checkpoint_name, generation):
+        file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
+        with open(file_path, "rb") as c:
+            [self.n, self.elitism_rate, self.id_generator, self.number_of_species,
+             self.generation, self.checkpoint_name,
+             saved_genomes] = pickle.load(c)
+
+            self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
+                            for species, genomes in saved_genomes.items()}
 
     def cluster(self, relative=False):
         """
@@ -692,11 +809,11 @@ class Population:
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
         # Get performance of K-Medodis for some # of clusters near k
-        ids_to_check = list(range(max(1, k - 2), min(n, k + 3)))
+        ids_to_check = list(range(max(1, k - 2), min(n + 1, k + 3)))
         all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
         scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
-        plt.plot(ids_to_check, list(scores.values()))
-        plt.show()
+        fig, [ax1, ax2] = plt.subplots(1, 2)
+        ax1.plot(ids_to_check, list(scores.values()))
 
         if relative:
             # Change number of clusters
@@ -723,8 +840,8 @@ class Population:
 
         # Plot distance matrix after clustering
         ind = np.argsort(labels)
-        plt.imshow(distances[np.ix_(ind, ind)])
-        plt.show()
+        ax2.imshow(distances[np.ix_(ind, ind)])
+        plt.show(block=False)
 
     def cluster_score(self, distances, labels):
         """
@@ -749,9 +866,13 @@ class Population:
         Group the genomes to species and evaluate them on training data
         Generate the next generation with selection, crossover and mutation
         """
+        # Saving checkpoint
+        print("Saving checkpoint")
+        self.save_checkpoint()
+
         self.cluster()
         print(self.species)
-        evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g)) for g in genomes],
+        evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g, ax=self.ax)) for g in genomes],
                                                         key=lambda g: g[1], reverse=True)
                                         for species, genomes in self.species.items()}
 
@@ -765,9 +886,13 @@ class Population:
                 print('{:64}:'.format(r), s)
             print('\n')
 
+        [g[0].visualize(input_size=(1, 28, 28)) for g in self.species.values()]
+
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
-            elite_genomes = [g for g, s in evaluated_genomes[:self.elitism]]
-            parents = self.parent_selection(evaluated_genomes, k=self.n-self.elitism)
+            n_sp = len(evaluated_genomes)
+            elitism = math.floor(self.elitism_rate * n_sp)
+            elite_genomes = [g for g, s in evaluated_genomes[:elitism]]
+            parents = self.parent_selection(evaluated_genomes, k=n_sp-elitism)
             new_genomes = [self.crossover(p[0], p[1]) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
 
@@ -892,16 +1017,22 @@ class Net(torch.nn.Module):
         return torch.reshape(outputs_by_id[2], (x.shape[0], -1))
 
 
-def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size):
+def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size, ax=None):
 
     print('Instantiating neural network from the following genome:')
     print(genome)
+    if ax is not None:
+        genome.visualize(input_size=input_size, ax=ax)
+    plt.pause(1)
 
     logging.debug('Building Net')
     net = Net(genome, input_size=input_size)
     net = net.to(torch_device)
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=2**genome.log_learning_rate, momentum=.9)
+    try:
+        optimizer = torch.optim.SGD(net.parameters(), lr=2**genome.log_learning_rate, momentum=.9)
+    except ValueError:
+        import pdb;pdb.set_trace()
 
     print('Beginning training')
     for epoch in range(2):
@@ -963,6 +1094,8 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
     child_genes = []
     child_nodes = []
 
+    disabled_ids = []
+
     # Genes
     ids_1, ids_2 = map(lambda x: set(x.genes_by_id.keys()), [genome1, genome2])
     for _id in ids_1 | ids_2:
@@ -972,12 +1105,12 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
             else:
                 gene = genome1.genes_by_id[_id].copy()
                 if random.random() > more_fit_crossover_rate:
-                    gene.enabled = False
+                    disabled_ids += [_id]
                 child_genes += [gene]
         else:
             gene = genome2.genes_by_id[_id].copy()
             if random.random() > less_fit_crossover_rate:
-                gene.enabled = False
+                disabled_ids += [_id]
             child_genes += [gene]
 
     # Nodes
@@ -990,7 +1123,9 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
 
     child_genome = Genome(population, log_learning_rate=genome1.log_learning_rate,
                           nodes_and_genes=[child_nodes, child_genes])
-    # TODO Ist das noch gültig?
+
+    for _id in disabled_ids:
+        child_genome.disable_edge(child_genome.genes_by_id[_id])
     return child_genome.mutate_random()
 
 
@@ -1032,8 +1167,21 @@ def main():
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     data_loader_test, data_loader_train, input_size = data_loader(torch_device)
 
+    while True:
+        loading = input("load from checkpoint? [y/n]")
+        if loading == 'n':
+            load = None
+            break
+        elif loading == 'y':
+            checkpoint = input("checkpoint name:")
+            generation = int(input("generation:"))
+            load = [checkpoint, generation]
+            break
+
+    fig, ax = plt.subplots()
+
     print('\n\nInitializing population\n')
-    p = Population(n=20, elitism_rate=2,
+    p = Population(n=50, name='first_test', elitism_rate=0.05, ax=ax,
                    evaluate_genome=functools.partial(
                        evaluate_genome_on_data,
                        torch_device=torch_device,
@@ -1045,7 +1193,8 @@ def main():
                        fitness_proportionate_tournament_selection,
                        tournament_size=3
                    ),
-                   crossover=crossover)
+                   crossover=crossover,
+                   load=load)
     for _ in range(10):
         p.evolve()
 
