@@ -4,13 +4,20 @@ import torch
 from net import Net
 
 
-def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size, monitor=None):
+def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size,
+                            epochs=2, monitor=None):
+    """
+    Instantiate the neural network from the genome and train it for a set amount of epochs
+    Evaluate the accuracy on the test data and return this as the score.
+    If a monitor is set, visualize the net that is currently training.
+    """
 
     n = genome.population.n
     i = next(genome.population.i) + 1
 
     print('Instantiating neural network from the following genome(%d/%d):' % (i, n))
     print(genome)
+    # Visualize current net
     if monitor is not None:
         monitor.send([1, [(genome.__class__, genome.save()), input_size],
                       {'kind': 'net-plot', 'n': n, 'i': i, 'title': 'train'}])
@@ -25,7 +32,7 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
         import pdb;pdb.set_trace()
 
     print('Beginning training')
-    for epoch in range(2):
+    for epoch in range(epochs):
         epoch_loss = 0.
         batch_loss = 0.
         n = len(data_loader_train) // 10

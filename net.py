@@ -7,6 +7,9 @@ from gene import KernelGene, PoolGene, DenseGene
 
 
 class Net(torch.nn.Module):
+    """
+    Build a feed-forward neural net with convolutions from a genome
+    """
 
     def __init__(self, genome, input_size):
         super().__init__()

@@ -5,8 +5,6 @@ import numpy as np
 from tools import weighted_choice, random_choices, limited_growth
 
 
-
-# genetic components
 class Gene:
     """
     Symbolizes a Edge in the Graph

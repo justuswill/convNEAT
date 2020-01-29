@@ -13,10 +13,12 @@ class Population:
     """
     A population of genomes to be evolved
     -----
-    n               - population size
-    evaluate_genome - how to get a score from genome
-    genomes         - the current population of genomes
-    generation      - keeps track of the current generation
+    n                - population size
+    evaluate_genome  - how to get a score from genome
+    parent_selection - how parents are selected from the population
+    elitism_rate     - the % of best genomes to transfer ot the new generation
+    load = [checkpoint_name, generation] - whether to load from a checkpoint
+    monitor          - if the results should be shown graphically
     """
 
     def __init__(self, n, evaluate_genome, parent_selection, crossover, name=None, elitism_rate=0.05,

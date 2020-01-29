@@ -8,7 +8,7 @@ from gene import Gene, KernelGene, PoolGene, DenseGene
 
 class Genome:
     """
-    Indirect representation of a feedforward convolutional net.
+    Indirect representation of a feed-forward convolutional net.
     This includes hyperparameters.
     The Minimal net is:
     Node 0 'Input' - Edge 3 - Node 1 'Flatten' - Edge 4 - Node 2 'Out'
