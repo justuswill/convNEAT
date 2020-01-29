@@ -38,13 +38,9 @@ Ideas:
 (-) dilation, bias
 (-) Mutation exception/variance
     Same for the selection of what genes to mutate
-- Bessere Representation für Graph (Existiert Kante? Node by id?)
-- mutate_to bei add_edge?
 - Bessere Visualisierung, Layerweise gerade verbinden
 - pool stride dial
 - better structure seperate algorithm / initialization/ data
-- checkpoints
-- kMeans und mse für abstand zu Punkten
 
 
 Genes:
