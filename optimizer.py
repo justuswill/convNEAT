@@ -24,7 +24,7 @@ class _Optimizer:
     def copy(self):
         pass
 
-    def dissimilarity(self):
+    def dissimilarity(self, other):
         pass
 
 
@@ -41,7 +41,7 @@ class SGDGene(_Optimizer):
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] + "log_learning_rate=%.2f, mom=%.2f, log:weight_decay=%.2f, damp=%.2f" %
+        return (r[:-1] + "log_learning_rate=%.2f, mom=%.2f, log_weight_decay=%.2f, damp=%.2f" %
                 (self.log_learning_rate, self.momentum,
                  self.log_weight_decay, self.dampening) + r[-1:])
 
@@ -97,4 +97,60 @@ class SGDGene(_Optimizer):
                          self.log_weight_decay - other.log_weight_decay, self.dampening - other.dampening])
         importance = np.array([0.5, 0.2, 0.2, 0.1])
         relevance = np.array([5, 1, 3, 1])
+        return np.sum(limited_growth(np.abs(dist), importance, relevance))
+
+
+class ADAMGene(_Optimizer):
+    """
+    Adam algorithm for adaptive gradient descent
+    """
+
+    def __init__(self, log_learning_rate=None, momentum=None, log_weight_decay=None, dampening=None):
+        self.log_learning_rate = log_learning_rate if log_learning_rate is not None else self.init_log_learning_rate()
+        self.momentum = momentum if momentum is not None else self.init_momentum()
+        self.log_weight_decay = log_weight_decay if log_weight_decay is not None else self.init_log_weight_decay()
+        self.dampening = dampening if dampening is not None else self.init_dampening()
+
+    def __repr__(self):
+        r = super().__repr__()
+        return (r[:-1] + "log_learning_rate=%.2f, log_weight_decay=%.2f" %
+                (self.log_learning_rate, self.log_weight_decay) + r[-1:])
+
+    def save(self):
+        return [self.log_learning_rate, self.log_weight_decay]
+
+    def load(self, save):
+        self.log_learning_rate, self.log_weight_decay = save
+        return self
+
+    def init_log_learning_rate(self):
+        return random.normalvariate(-3, 2)
+
+    def init_log_weight_decay(self):
+        return random.normalvariate(-3, 2)
+
+    def mutate_log_learning_rate(self):
+        self.log_learning_rate += random.normalvariate(0, 1)
+
+    def mutate_log_weight_decay(self):
+        self.log_weight_decay += random.normalvariate(0, 1)
+
+    def mutate_random(self):
+        mutations = random_choices((self.mutate_log_learning_rate, self.mutate_log_weight_decay),
+                                   (0.5, 0.2))
+        for mutate in mutations:
+            mutate()
+        return self
+
+    def copy(self):
+        return SGDGene(log_learning_rate=self.log_learning_rate, log_weight_decay=self.log_weight_decay)
+
+    def dissimilarity(self, other):
+        if type(other) != ADAMGene:
+            return 1
+
+        dist = np.array([self.log_learning_rate - other.log_learning_rate,
+                         self.log_weight_decay - other.log_weight_decay])
+        importance = np.array([0.8, 0.2])
+        relevance = np.array([5, 3])
         return np.sum(limited_growth(np.abs(dist), importance, relevance))
