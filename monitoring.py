@@ -18,7 +18,9 @@ def monitoring(conn):
             recv = conn.recv()
             cax = ax[recv[0] // 2, recv[0] % 2]
             # clear except title
-            [line.remove() for line in cax.lines + cax.collections + cax.texts]
+            title = cax.title
+            cax.clear()
+            cax.title = title
             args = recv[1]
             kwargs = recv[2]
             if 'kind' in kwargs.keys():
@@ -38,5 +40,4 @@ def monitoring(conn):
             else:
                 cax.plot(*args, **kwargs)
             # Take time to let __main__ process reach next monitor call
-            plt.pause(1)
-        plt.pause(5)
+        plt.pause(3)

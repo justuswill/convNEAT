@@ -45,7 +45,7 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
         else:
             child_nodes += [genome2.nodes_by_id[_id].copy()]
 
-    child_genome = Genome(population, log_learning_rate=genome1.log_learning_rate,
+    child_genome = Genome(population, optimizer=genome1.optimizer,
                           nodes_and_genes=[child_nodes, child_genes])
 
     random.shuffle(disabled_ids)

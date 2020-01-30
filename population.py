@@ -23,13 +23,14 @@ class Population:
     """
 
     def __init__(self, n, evaluate_genome, parent_selection, crossover, name=None, elitism_rate=0.05,
-                 load=None, monitor=None):
+                 min_species_size=4, load=None, monitor=None):
         # Evolution parameters
         self.n = n
         self.evaluate_genome = evaluate_genome
         self.parent_selection = parent_selection
         self.crossover = crossover
         self.elitism_rate = elitism_rate
+        self.min_species_size = min_species_size
 
         # Load instead
         if load is not None:
@@ -99,7 +100,7 @@ class Population:
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
         # Get performance of K-Medodis for some # of clusters near k
-        ids_to_check = list(range(max(1, k - 2), min(n + 1, k + 3)))
+        ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
         all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
         scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
 
@@ -153,22 +154,24 @@ class Population:
             score += np.min(in_cluster_scores)
         return score / (k*self.n)
 
-    def new_species_sizes(self, score_by_species, min_species_size=4):
+    def new_species_sizes(self, score_by_species):
         """
         Calculate new the new sizes for every species (proportionate to fitness)
         """
         scores = np.array(list(score_by_species.values()))
-        sizes = np.maximum(scores/sum(scores) * self.n, min_species_size)
+        sizes = np.maximum(scores/sum(scores) * self.n, self.min_species_size)
         sizes = np.around(sizes/sum(sizes) * self.n)
 
         # Force n genomes
-        while sum(sizes) < self.n:
+        while sum(sizes) > self.n:
+            print(sizes)
             r = random.choice(np.where(sizes > min_species_size))
             sizes[r] -= 1
-        while sum(sizes) > self.n:
+        while sum(sizes) < self.n:
+            print("2", sizes)
             sizes[random.choice(range(sizes.shape[0]))] += 1
 
-        return {sp: size for sp, size in zip(score_by_species.keys(), sizes)}
+        return {sp: int(size) for sp, size in zip(score_by_species.keys(), sizes)}
 
     def evolve(self):
         """
@@ -194,21 +197,23 @@ class Population:
                 if len(r) > 64:
                     r = r[:60] + '...' + r[-1:]
                 print('{:64}:'.format(r), s)
-            print('\n')
+            print()
 
         # show best net
         if self.monitor is not None:
-            best_of_species = [genomes[0] for genomes in evaluated_genomes_by_species.items()]
+            best_of_species = [genomes[0] for genomes in evaluated_genomes_by_species.values()]
             best_genome, score = sorted(best_of_species, key=lambda x: x[1])[0]
             self.monitor.send([0, [(best_genome.__class__, best_genome.save())],
                                {'kind': 'net-plot', 'input_size': (1, 28, 28), 'score': score, 'title': 'best'}])
 
         # Score of species is mean of scores
         score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
-                            for species, genomes in evaluated_genomes_by_species}
+                            for species, genomes in evaluated_genomes_by_species.items()}
+
         # Resize species, increase better scoring species
         new_sizes = self.new_species_sizes(score_by_species)
 
+        print("Breading new neural networks")
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
             old_n_sp = len(evaluated_genomes)
             new_n_sp = new_sizes[sp]

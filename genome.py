@@ -5,7 +5,7 @@ import numpy as np
 from tools import weighted_choice, random_choices, limited_growth
 from node import Node
 from gene import Gene, KernelGene, PoolGene, DenseGene
-from optimizer import SGDGene
+from optimizer import SGDGene, ADAMGene
 
 
 class Genome:
@@ -37,11 +37,12 @@ class Genome:
         return self.population.next_id()
 
     def save(self):
-        return [self.log_learning_rate, [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
+        return [(self.optimizer.__class__, self.optimizer.save()), [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
                 [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes]]
 
     def load(self, save):
-        self.log_learning_rate, saved_nodes, saved_genes = save
+        saved_optimizer, saved_nodes, saved_genes = save
+        self.optimizer = saved_optimizer[0]().load(saved_optimizer[1])
         self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
         self.genes = [g[0](g[1], g[2], g[3]).load(g[4]) for g in saved_genes]
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
@@ -62,7 +63,7 @@ class Genome:
                  Gene(4, 1, 2, mutate_to=[[KernelGene, DenseGene], [0, 1]]).mutate_random()]]
 
     def init_optimizer(self):
-        return SGDGene()
+        return weighted_choice([SGDGene, ADAMGene], [0.5, 0.5])()
 
     def mutate_optimizer(self):
         self.optimizer = self.optimizer.mutate_random()

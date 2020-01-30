@@ -28,7 +28,8 @@ def data_loader(torch_device):
     train_val = torchvision.datasets.MNIST(
         'data', train=True, transform=transform,
         target_transform=target_transform, download=True)
-    dataset_train, dataset_val = torch.utils.data.random_split(train_val, [0.85 * len(train_val), 0.15 * len(train_val)])
+    dataset_train, dataset_val = torch.utils.data.random_split(
+        train_val, [int(0.85 * len(train_val)), int(0.15 * len(train_val))])
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, batch_size=100, shuffle=True)
     data_loader_val = torch.utils.data.DataLoader(
@@ -77,6 +78,7 @@ def main():
     p = Population(n=50, name='first_test', elitism_rate=0.05, monitor=monitor,
                    evaluate_genome=functools.partial(
                        evaluate_genome_on_data,
+                       epochs=2,
                        torch_device=torch_device,
                        data_loader_train=data_loader_train,
                        data_loader_test=data_loader_val,
@@ -88,7 +90,7 @@ def main():
                    ),
                    crossover=crossover,
                    load=load)
-    for _ in range(10):
+    for _ in range(50):
         p.evolve()
 
 

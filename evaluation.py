@@ -2,7 +2,7 @@ import logging
 import torch
 
 from net import Net
-from optimizer import SGDGene
+from optimizer import SGDGene, ADAMGene
 
 
 def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size,
@@ -25,7 +25,6 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
 
     logging.debug('Building Net')
     net = Net(genome, input_size=input_size)
-    print(net.state_dict().keys())
 
     # Load saved parameters
     net_dict = net.state_dict()
@@ -37,15 +36,15 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     net = net.to(torch_device)
     criterion = torch.nn.CrossEntropyLoss()
 
-    try:
-        opt = genome.optimizer
-        if type(opt) == SGDGene:
-            optimizer = torch.optim.SGD(net.parameters(), lr=2**opt.log_learning_rate, momentum=opt.momentum,
-                                        weight_decay=2**opt.log_weight_decay, dampening=opt.dampening, nesterov=True)
-        else:
-            raise ValueError('Optimizer %s not supported' % type(genome.optimizer))
-    except ValueError:
-        import pdb;pdb.set_trace()
+    opt = genome.optimizer
+    if type(opt) == SGDGene:
+        optimizer = torch.optim.SGD(net.parameters(), lr=2**opt.log_learning_rate, momentum=opt.momentum,
+                                    weight_decay=2**opt.log_weight_decay, nesterov=True)
+    elif type(opt) == ADAMGene:
+        optimizer = torch.optim.Adam(net.parameters(), lr=2**opt.log_learning_rate,
+                                     weight_decay=2**opt.log_weight_decay)
+    else:
+        raise ValueError('Optimizer %s not supported' % type(genome.optimizer))
 
     print('Beginning training')
     for epoch in range(epochs):
