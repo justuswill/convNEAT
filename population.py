@@ -180,14 +180,11 @@ class Population:
         self.save_checkpoint()
 
         self.cluster()
-        # Reset counter
+        # Reset training progress counter
         self.i = itertools.count()
         evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g, monitor=self.monitor))
                                                          for g in genomes], key=lambda g: g[1], reverse=True)
                                         for species, genomes in self.species.items()}
-        # Score of species is mean
-        score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
-                            for species, genomes in evaluated_genomes_by_species}
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
@@ -206,6 +203,9 @@ class Population:
             self.monitor.send([0, [(best_genome.__class__, best_genome.save())],
                                {'kind': 'net-plot', 'input_size': (1, 28, 28), 'score': score, 'title': 'best'}])
 
+        # Score of species is mean of scores
+        score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
+                            for species, genomes in evaluated_genomes_by_species}
         # Resize species, increase better scoring species
         new_sizes = self.new_species_sizes(score_by_species)
 

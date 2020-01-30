@@ -2,6 +2,7 @@ import logging
 import torch
 
 from net import Net
+from optimizer import SGDGene
 
 
 def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader_test, input_size,
@@ -35,8 +36,14 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
 
     net = net.to(torch_device)
     criterion = torch.nn.CrossEntropyLoss()
+
     try:
-        optimizer = torch.optim.SGD(net.parameters(), lr=2**genome.log_learning_rate, momentum=.9)
+        opt = genome.optimizer
+        if type(opt) == SGDGene:
+            optimizer = torch.optim.SGD(net.parameters(), lr=2**opt.log_learning_rate, momentum=opt.momentum,
+                                        weight_decay=2**opt.log_weight_decay, dampening=opt.dampening, nesterov=True)
+        else:
+            raise ValueError('Optimizer %s not supported' % type(genome.optimizer))
     except ValueError:
         import pdb;pdb.set_trace()
 

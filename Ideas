@@ -5,9 +5,7 @@ Problems:
   und bei der Bewertung dementsprechend schlecht abschneiden
 
 Enhancements:
-- Training zunächst nur auf kleinen Ausschnitten des
-Trainingsdatensatzes, Abtrennung eines Validierungsdatensatzes und
-Nutzung von Early-Stopping-Verfahren
+- Nutzung von Early-Stopping-Verfahren
 - Trainingsfortschritt dort wo möglich zwischen Generationen erhalten
 (z.B. Parameter Layer-weise zwischenspeichern, neu initialisieren nur
 selten und natürlich bei neu hinzugefügten Layern)
@@ -16,20 +14,8 @@ selten und natürlich bei neu hinzugefügten Layern)
 (Trainingsfortschritt in Ähnlichkeitsfunktion einbauen)
 - Möglicherweise den Suchraum um neue Neuronale-Netz-Architekturen erweitern
 
-Genome:
-- Nodes: Filter/Pooling Layer:
-  - Filter:
-    * 3D: Tiefe + Höhe/Breite
-    * Wenn Höhe Filter zu klein:
-      1. Nimm die ersten Layer von Depth
-      2. Wiederhole bis passt
-    * Wenn Höhe Filter zu groß:
-      1. Cut the rest of data
-      2. Start again an.
-  -> Dont use all the data vs smaller thing. (maybe var)
-- Edges: -
-
 Ideas:
+- inter-gene crossover
 - Different optimizer genes + hyperparameters
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty

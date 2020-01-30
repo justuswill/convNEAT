@@ -5,6 +5,7 @@ import numpy as np
 from tools import weighted_choice, random_choices, limited_growth
 from node import Node
 from gene import Gene, KernelGene, PoolGene, DenseGene
+from optimizer import SGDGene
 
 
 class Genome:
@@ -20,22 +21,17 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, log_learning_rate=None, nodes_and_genes=None):
+    def __init__(self, population, optimizer=None, nodes_and_genes=None):
         self.population = population
-        self.log_learning_rate = log_learning_rate or self.init_log_learning_rate()
+        self.optimizer = optimizer or self.init_optimizer()
 
         self.nodes, self.genes = nodes_and_genes or self.init_genome()
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] + ' | learning_rate=%.4f, nodes=%s, genes=%s' %
-                (self.log_learning_rate, self.nodes, [gene for gene in self.genes if gene.enabled]) + r[-1:])
-
-    def init_genome(self):
-        return [[Node(0, 0, role='input'), Node(1, 1, role='flatten'), Node(2, 2, role='output')],
-                [Gene(3, 0, 1, mutate_to=[[KernelGene, DenseGene], [1, 0]]).mutate_random(),
-                 Gene(4, 1, 2, mutate_to=[[KernelGene, DenseGene], [0, 1]]).mutate_random()]]
+        return (r[:-1] + ' | optimizer=%s, nodes=%s, genes=%s' %
+                (self.optimizer, self.nodes, [gene for gene in self.genes if gene.enabled]) + r[-1:])
 
     def next_id(self):
         return self.population.next_id()
@@ -60,11 +56,16 @@ class Genome:
             nodes_by_id = {**nodes_by_id, **{node.id: node}}
         return [genes_by_id, nodes_by_id]
 
-    def init_log_learning_rate(self):
-        return random.normalvariate(-6, 2)
+    def init_genome(self):
+        return [[Node(0, 0, role='input'), Node(1, 1, role='flatten'), Node(2, 2, role='output')],
+                [Gene(3, 0, 1, mutate_to=[[KernelGene, DenseGene], [1, 0]]).mutate_random(),
+                 Gene(4, 1, 2, mutate_to=[[KernelGene, DenseGene], [0, 1]]).mutate_random()]]
 
-    def mutate_log_learning_rate(self):
-        self.log_learning_rate += random.normalvariate(0, 1)
+    def init_optimizer(self):
+        return SGDGene()
+
+    def mutate_optimizer(self):
+        self.optimizer = self.optimizer.mutate_random()
 
     def mutate_genes(self, p):
         mutate = np.random.rand(len(self.genes)) < p
@@ -154,9 +155,9 @@ class Genome:
 
     def mutate_random(self):
         mutations = random_choices((lambda: self.mutate_genes(0.5), lambda: self.mutate_nodes(0.2),
-                                    self.mutate_log_learning_rate,
+                                    self.mutate_optimizer,
                                     self.mutate_disable_edge, self.enable_edge, self.split_edge, self.add_edge),
-                                   (1, 1, 0.5, 0.1, 0.1, 0.7, 0.3))
+                                   (1, 1, 1, 0.1, 0.1, 0.7, 0.3))
         for mutate in mutations:
             mutate()
         return self
@@ -236,7 +237,7 @@ class Genome:
                 node.size = node.output_size(in_sizes)
                 outputs_by_id[node.id] = node.size
 
-    def dissimilarity(self, other, c=[5, 5, 5, 1, 5]):
+    def dissimilarity(self, other, c=[5, 5, 5, 2, 5]):
         """
         The distance/dissimilarity of two genomes, similar to NEAT
         dist = (c1*S + c2*D + c3*E)/N + c4*T + c5*K
@@ -259,7 +260,7 @@ class Genome:
         S = sum([genes_1[_id].dissimilarity(genes_2[_id]) for _id in ids_1 & ids_2])
         D = len([_id for _id in ids_1 ^ ids_2 if _id < excess_start])
         E = len(ids_1 ^ ids_2) - D
-        T = limited_growth(np.abs(self.log_learning_rate - other.log_learning_rate), 1, 5)
+        T = self.optimizer.dissimilarity(other.optimizer)
         K = sum([nodes_1[_id].dissimilarity(nodes_2[_id]) for _id in node_ids]) / len(node_ids)
 
         return (c[0] * S + c[1] * D + c[2] * E) / N + c[3] * T + c[4] * K

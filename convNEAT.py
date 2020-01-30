@@ -25,11 +25,14 @@ def data_loader(torch_device):
     ])
     target_transform = torchvision.transforms.Lambda(
         lambda x: torch.tensor(x, device=torch_device))
-    dataset_train = torchvision.datasets.MNIST(
+    train_val = torchvision.datasets.MNIST(
         'data', train=True, transform=transform,
         target_transform=target_transform, download=True)
+    dataset_train, dataset_val = torch.utils.data.random_split(train_val, [0.85 * len(train_val), 0.15 * len(train_val)])
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, batch_size=100, shuffle=True)
+    data_loader_val = torch.utils.data.DataLoader(
+        dataset_val, batch_size=100, shuffle=True)
     dataset_test = torchvision.datasets.MNIST(
         'data', train=False, transform=transform,
         target_transform=target_transform, download=True)
@@ -40,7 +43,7 @@ def data_loader(torch_device):
     peek = next(iter(data_loader_train))
     input_size = list(peek[0].shape[1:])
 
-    return data_loader_test, data_loader_train, input_size
+    return data_loader_test, data_loader_train, data_loader_val, input_size
 
 
 def main():
@@ -51,7 +54,7 @@ def main():
     torch.random.manual_seed(seed)
 
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_loader_test, data_loader_train, input_size = data_loader(torch_device)
+    data_loader_test, data_loader_train, data_loader_val, input_size = data_loader(torch_device)
 
     # Load from checkpoint?
     while True:
@@ -76,7 +79,7 @@ def main():
                        evaluate_genome_on_data,
                        torch_device=torch_device,
                        data_loader_train=data_loader_train,
-                       data_loader_test=data_loader_test,
+                       data_loader_test=data_loader_val,
                        input_size=input_size
                    ),
                    parent_selection=functools.partial(
