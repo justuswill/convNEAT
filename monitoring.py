@@ -17,7 +17,6 @@ def monitoring(conn):
         if conn.poll():
             recv = conn.recv()
             cax = ax[recv[0] // 2, recv[0] % 2]
-            print(vars(cax).keys())
             # clear except title
             [line.remove() for line in cax.lines + cax.collections + cax.texts]
             args = recv[1]

@@ -24,6 +24,15 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
 
     logging.debug('Building Net')
     net = Net(genome, input_size=input_size)
+    print(net.state_dict().keys())
+
+    # Load saved parameters
+    net_dict = net.state_dict()
+    all_net_parameters = {k: v for gene in genome.genes for k, v in gene.net_parameters.items()
+                          if k in net_dict}
+    net_dict.update(all_net_parameters)
+    net.load_state_dict(net_dict)
+
     net = net.to(torch_device)
     criterion = torch.nn.CrossEntropyLoss()
     try:
@@ -72,5 +81,11 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     print('Accuracy of the network on the {} test images: {:5.2f} %  '
           '({} / {})'.format(total, 100 * correct / total, correct, total))
     print()
+
+    # Save weights and bias
+    for name, parameter in net.state_dict().items():
+        if name.startswith('conv') or name.startswith('pool_') or name.startswith('dense_'):
+            _id = int(name.split('.')[0].split('_')[-1])
+            genome.genes_by_id[_id].net_parameters[name] = parameter.to('cpu')
 
     return correct / total

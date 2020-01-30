@@ -21,6 +21,9 @@ class Gene:
 
         self.mutate_to = mutate_to or self.init_mutate_to()
 
+        # Weights & bias - To be set after first training.
+        self.net_parameters = dict()
+
     def __repr__(self):
         r = super().__repr__()
         return r[:-1] + ' |%s| ID = %d (%d->%d) ' % (self.enabled, self.id, self.id_in, self.id_out) + r[-1:]

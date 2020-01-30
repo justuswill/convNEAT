@@ -74,7 +74,7 @@ class Net(torch.nn.Module):
                         in_features=n_in.size[2],
                         out_features=n_in.size[2] + gene.size_change
                     )
-                    self.add_module('dense1_%03d' % gene.id, dense)
+                    self.add_module('dense_%03d' % gene.id, dense)
                     self.modules_by_id[gene.id] += [dense, possible_activations[gene.activation]]
                 else:
                     raise ValueError('Module type %s not supported' % type(gene))
