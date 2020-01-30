@@ -3,6 +3,7 @@ import time
 import os
 import pickle
 import math
+import random
 import numpy as np
 
 from KMedoids import KMedoids
@@ -152,6 +153,23 @@ class Population:
             score += np.min(in_cluster_scores)
         return score / (k*self.n)
 
+    def new_species_sizes(self, score_by_species, min_species_size=4):
+        """
+        Calculate new the new sizes for every species (proportionate to fitness)
+        """
+        scores = np.array(list(score_by_species.values()))
+        sizes = np.maximum(scores/sum(scores) * self.n, min_species_size)
+        sizes = np.around(sizes/sum(sizes) * self.n)
+
+        # Force n genomes
+        while sum(sizes) < self.n:
+            r = random.choice(np.where(sizes > min_species_size))
+            sizes[r] -= 1
+        while sum(sizes) > self.n:
+            sizes[random.choice(range(sizes.shape[0]))] += 1
+
+        return {sp: size for sp, size in zip(score_by_species.keys(), sizes)}
+
     def evolve(self):
         """
         Group the genomes to species and evaluate them on training data
@@ -167,6 +185,9 @@ class Population:
         evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g, monitor=self.monitor))
                                                          for g in genomes], key=lambda g: g[1], reverse=True)
                                         for species, genomes in self.species.items()}
+        # Score of species is mean
+        score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
+                            for species, genomes in evaluated_genomes_by_species}
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
@@ -185,12 +206,15 @@ class Population:
             self.monitor.send([0, [(best_genome.__class__, best_genome.save())],
                                {'kind': 'net-plot', 'input_size': (1, 28, 28), 'score': score, 'title': 'best'}])
 
+        # Resize species, increase better scoring species
+        new_sizes = self.new_species_sizes(score_by_species)
 
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
-            n_sp = len(evaluated_genomes)
-            elitism = math.floor(self.elitism_rate * n_sp)
+            old_n_sp = len(evaluated_genomes)
+            new_n_sp = new_sizes[sp]
+            elitism = min(math.floor(self.elitism_rate * old_n_sp), new_n_sp)
             elite_genomes = [g for g, s in evaluated_genomes[:elitism]]
-            parents = self.parent_selection(evaluated_genomes, k=n_sp-elitism)
+            parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
             new_genomes = [self.crossover(p[0], p[1]) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
 
