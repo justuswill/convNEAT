@@ -1,5 +1,6 @@
 import random
 import networkx as nx
+import numpy as np
 
 from tools import weighted_choice, random_choices, limited_growth
 from node import Node

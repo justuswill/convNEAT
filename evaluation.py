@@ -19,8 +19,8 @@ def evaluate_genome_on_data(genome, torch_device, data_loader_train, data_loader
     print(genome)
     # Visualize current net
     if monitor is not None:
-        monitor.send([1, [(genome.__class__, genome.save()), input_size],
-                      {'kind': 'net-plot', 'n': n, 'i': i, 'title': 'train'}])
+        monitor.send([1, [(genome.__class__, genome.save())],
+                      {'kind': 'net-plot', 'n': n, 'i': i, 'title': 'train', 'input_size': input_size}])
 
     logging.debug('Building Net')
     net = Net(genome, input_size=input_size)

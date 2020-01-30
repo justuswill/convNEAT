@@ -17,6 +17,9 @@ def monitoring(conn):
         if conn.poll():
             recv = conn.recv()
             cax = ax[recv[0] // 2, recv[0] % 2]
+            print(vars(cax).keys())
+            # clear except title
+            [line.remove() for line in cax.lines + cax.collections + cax.texts]
             args = recv[1]
             kwargs = recv[2]
             if 'kind' in kwargs.keys():
@@ -31,7 +34,7 @@ def monitoring(conn):
                         cax.title.set_text('Best net - acc: %.2f' % kwargs['score'])
                 # Other pyplot function
                 else:
-                    getattr(cax, kwargs['kind'])(*args, **{k: v for k, v in kwargs if k != 'kind'})
+                    getattr(cax, kwargs['kind'])(*args, **{k: v for k, v in kwargs.items() if k != 'kind'})
             # ax.plot
             else:
                 cax.plot(*args, **kwargs)
