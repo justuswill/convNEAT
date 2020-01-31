@@ -54,7 +54,7 @@ class SGDGene(_Optimizer):
         return random.normalvariate(-6, 2)
 
     def init_momentum(self):
-        return min(0.01, random.normalvariate(1, 0.4))
+        return max(0.01, random.normalvariate(1, 0.4))
 
     def init_log_weight_decay(self):
         return random.normalvariate(-3, 2)
@@ -63,7 +63,7 @@ class SGDGene(_Optimizer):
         self.log_learning_rate += random.normalvariate(0, 1)
 
     def mutate_momentum(self):
-        self.momentum = min(0.01, self.momentum + random.normalvariate(0, 0.2))
+        self.momentum = max(0.01, self.momentum + random.normalvariate(0, 0.2))
 
     def mutate_log_weight_decay(self):
         self.log_weight_decay += random.normalvariate(0, 1)

@@ -2,7 +2,6 @@ import functools
 import random
 import numpy as np
 import logging
-from multiprocessing import Process, Pipe
 
 import torch
 import torchvision
@@ -12,7 +11,7 @@ from selection import cut_off_selection, tournament_selection, fitness_proportio
     fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling
 from crossover import crossover
 from evaluation import evaluate_genome_on_data
-from monitoring import monitoring
+from monitor import Monitor
 
 
 def data_loader(torch_device):
@@ -43,8 +42,9 @@ def data_loader(torch_device):
     # peek in data to get the input_size
     peek = next(iter(data_loader_train))
     input_size = list(peek[0].shape[1:])
+    output_size = 10
 
-    return data_loader_test, data_loader_train, data_loader_val, input_size
+    return data_loader_test, data_loader_train, data_loader_val, input_size, output_size
 
 
 def main():
@@ -55,7 +55,7 @@ def main():
     torch.random.manual_seed(seed)
 
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_loader_test, data_loader_train, data_loader_val, input_size = data_loader(torch_device)
+    data_loader_test, data_loader_train, data_loader_val, input_size, output_size = data_loader(torch_device)
 
     # Load from checkpoint?
     while True:
@@ -69,20 +69,16 @@ def main():
             load = [checkpoint, generation]
             break
 
-    # Monitoring
-    child_conn, monitor = Pipe()
-    process = Process(target=monitoring, args=(child_conn,))
-    process.start()
-
     print('\n\nInitializing population\n')
-    p = Population(n=50, name='first_test', elitism_rate=0.05, monitor=monitor,
+    p = Population(n=10, name='first_test', elitism_rate=0.05, monitor=Monitor(),
                    evaluate_genome=functools.partial(
                        evaluate_genome_on_data,
-                       epochs=2,
+                       epochs=1,
                        torch_device=torch_device,
                        data_loader_train=data_loader_train,
                        data_loader_test=data_loader_val,
-                       input_size=input_size
+                       input_size=input_size,
+                       output_size=output_size
                    ),
                    parent_selection=functools.partial(
                        fitness_proportionate_tournament_selection,

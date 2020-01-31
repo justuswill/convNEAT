@@ -25,38 +25,41 @@ class Population:
     def __init__(self, n, evaluate_genome, parent_selection, crossover, name=None, elitism_rate=0.05,
                  min_species_size=4, load=None, monitor=None):
         # Evolution parameters
-        self.n = n
         self.evaluate_genome = evaluate_genome
         self.parent_selection = parent_selection
         self.crossover = crossover
-        self.elitism_rate = elitism_rate
         self.min_species_size = min_species_size
+        self.elitism_rate = elitism_rate
+
+        # Plotting
+        self.monitor = monitor
+        # For tracking training progress
+        self.i = itertools.count()
 
         # Load instead
         if load is not None:
             self.load_checkpoint(*load)
-        self.monitor = monitor
-        # For training progress
-        self.i = itertools.count()
+        else:
+            self.n = n
 
-        # Init Genomes
-        self.id_generator = itertools.count()
-        # 0-5 is reserved
-        [f() for f in [self.next_id]*5]
+            # Historical markers starting at 5
+            self.id_generator = itertools.count(5)
 
-        # Begin with only one species
-        self.number_of_species = 1
-        self.species = {0: [Genome(self) for _ in range(n)]}
-        self.generation = 1
+            # Begin with only one species
+            self.number_of_species = 1
+            self.species = {0: [Genome(self) for _ in range(n)]}
+            self.best_genome = self.species[0][0].copy()
+            self.top_score = 0
 
-        self.checkpoint_name = name or time.strftime("%d.%m-%H:%M")
+            self.generation = 1
+            self.checkpoint_name = name or time.strftime("%d.%m-%H:%M")
 
     def next_id(self):
         return next(self.id_generator)
 
     def save_checkpoint(self):
-        save = [self.n, self.elitism_rate, self.id_generator, self.number_of_species,
-                self.generation, self.checkpoint_name,
+        save = [self.n, self.id_generator, self.number_of_species, self.generation,
+                self.checkpoint_name, self.top_score, (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
 
@@ -70,10 +73,10 @@ class Population:
     def load_checkpoint(self, checkpoint_name, generation):
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
-            [self.n, self.elitism_rate, self.id_generator, self.number_of_species,
-             self.generation, self.checkpoint_name,
+            [self.n, self.id_generator, self.number_of_species, self.generation,
+             self.checkpoint_name, self.top_score, saved_best_genome,
              saved_genomes] = pickle.load(c)
-
+            self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1])
             self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
@@ -106,7 +109,7 @@ class Population:
 
         # Plot clustering performance
         if self.monitor is not None:
-            self.monitor.send([2, [ids_to_check, list(scores.values())], dict()])
+            self.monitor.plot(2, ids_to_check, list(scores.values()))
 
         if relative:
             # Change number of clusters
@@ -131,10 +134,14 @@ class Population:
         for i, g in enumerate(all_genomes):
             self.species[labels[i]] += [g]
 
-        # Plot distance matrix after clustering
+        # Plot distance matrix after clustering with cluster boxes
+        species_len = np.cumsum([0] + [len(g) for g in self.species.values()])
         ind = np.argsort(labels)
         if self.monitor is not None:
-            self.monitor.send([3, [distances[np.ix_(ind, ind)]], {'kind': 'imshow'}])
+            self.monitor.plot(3, distances[np.ix_(ind, ind)], kind='imshow')
+            for s, e in zip(species_len[:-1], species_len[1:]):
+                self.monitor.plot(3, np.array([s, s, e, e, s]) - 0.5, np.array([s, e, e, s, s]) - 0.5,
+                                  c='red', linewidth=1.5, add=True)
 
     def cluster_score(self, distances, labels):
         """
@@ -165,7 +172,7 @@ class Population:
         # Force n genomes
         while sum(sizes) > self.n:
             print(sizes)
-            r = random.choice(np.where(sizes > min_species_size))
+            r = random.choice(np.where(sizes > self.min_species_size))
             sizes[r] -= 1
         while sum(sizes) < self.n:
             print("2", sizes)
@@ -203,8 +210,11 @@ class Population:
         if self.monitor is not None:
             best_of_species = [genomes[0] for genomes in evaluated_genomes_by_species.values()]
             best_genome, score = sorted(best_of_species, key=lambda x: x[1])[0]
-            self.monitor.send([0, [(best_genome.__class__, best_genome.save())],
-                               {'kind': 'net-plot', 'input_size': (1, 28, 28), 'score': score, 'title': 'best'}])
+            if score > self.top_score:
+                self.top_score = score
+                self.best_genome = best_genome.copy()
+                self.monitor.plot(0, (best_genome.__class__, best_genome.save()), kind='net-plot', input_size=(1, 28, 28),
+                                  score=score, title='best')
 
         # Score of species is mean of scores
         score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)

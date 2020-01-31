@@ -31,7 +31,7 @@ class Genome:
     def __repr__(self):
         r = super().__repr__()
         return (r[:-1] + ' | optimizer=%s, nodes=%s, genes=%s' %
-                (self.optimizer, self.nodes, [gene for gene in self.genes if gene.enabled]) + r[-1:])
+                (self.optimizer, self.nodes, self.genes) + r[-1:])
 
     def next_id(self):
         return self.population.next_id()
@@ -84,15 +84,13 @@ class Genome:
         # depth first search in feed-forward net
         if id_s == id_t:
             return True
-        neig = [gene.id_out for gene in self.genes if gene.id_in == id_s]
+        neig = [gene.id_out for gene in self.genes if gene.id_in == id_s and gene.enabled]
         if len(neig) == 0:
             return False
 
         for p in neig:
             if self.dps(p, id_t, pre=id_s):
                 return True
-        if pre is None:
-            raise ValueError('No path through net in genome %s' % self.__repr__())
         return False
 
     def disable_edge(self, gene):
@@ -237,6 +235,11 @@ class Genome:
                 in_sizes = [edge.output_size(outputs_by_id[edge.id_in]) for edge in in_edges]
                 node.size = node.output_size(in_sizes)
                 outputs_by_id[node.id] = node.size
+
+    def copy(self):
+        return Genome(self.population, optimizer=self.optimizer.copy(),
+                      nodes_and_genes=[[node.copy() for node in self.nodes],
+                                       [gene.copy() for gene in self.genes]])
 
     def dissimilarity(self, other, c=[5, 5, 5, 2, 5]):
         """

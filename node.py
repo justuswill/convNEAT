@@ -68,7 +68,7 @@ class Node:
             logging.debug('Mutated merge on gene %d' % self.id)
             return self.output_size(in_sizes)
         self.target_size = out_size
-        return [1, 1, int(np.prod(out_size))] if self.role == 'flatten' else out_size
+        return [1, 1, int(np.prod(out_size))] if self.role in ['flatten', 'output'] else out_size
 
     def copy(self):
         return Node(self.id, self.depth, merge=self.merge, role=self.role)

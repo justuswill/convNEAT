@@ -115,19 +115,28 @@ class KernelGene(Gene):
 
     def mutate_width(self):
         self.width = max(1, self.width + random.choice([-2, -1, 1, 2]))
+        # force padding <= half of kernel size
+        if 2 * self.padding > self.width:
+            self.padding = self.width // 2
 
     def mutate_height(self):
         self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
+        # force padding <= half of kernel size
+        if 2 * self.padding > self.height:
+            self.padding = self.height // 2
 
     def mutate_size(self):
         r = random.choice([-2, -1, 1, 2])
         [self.width, self.height] = map(lambda x: max(1, x + r), [self.width, self.height])
+        # force padding <= half of kernel size
+        if 2 * self.padding > min(self.width, self.height):
+            self.padding = min(self.width // 2, self.height // 2)
 
     def mutate_stride(self):
         self.stride = max(1, self.stride + random.choice([-2, -1, 1, 2]))
 
     def mutate_padding(self):
-        self.padding = max(0, self.padding + random.choice([-2, -1, 1, 2]))
+        self.padding = max(0, min(self.width // 2, self.height // 2, self.padding + random.choice([-2, -1, 1, 2])))
 
     def mutate_depth_size_change(self):
         self.depth_size_change = self.depth_size_change + random.choice([-2, -1, 1, 2])
@@ -161,6 +170,10 @@ class KernelGene(Gene):
         if not in_height - (self.height - 1) + 2 * self.height > 0:
             self.height = 2 * self.padding + in_height
             logging.debug('Mutated height on gene %d' % self.id)
+
+        # force padding <= half of kernel size
+        if not 2 * self.padding <= min(self.width, self.height):
+            self.padding = min(self.width // 2, self.height // 2)
 
         out_depth = in_depth + self.depth_size_change
         out_width = ((in_width - (self.width - 1) + 2 * self.padding - 1) // self.stride) + 1
@@ -235,20 +248,29 @@ class PoolGene(Gene):
 
     def mutate_width(self):
         self.width = max(1, self.width + random.choice([-2, -1, 1, 2]))
+        # force padding <= half of kernel size
+        if 2 * self.padding > self.width:
+            self.padding = self.width // 2
 
     def mutate_height(self):
         self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
+        # force padding <= half of kernel size
+        if 2 * self.padding > self.height:
+            self.padding = self.height // 2
 
     def mutate_size(self):
         r = random.choice([-2, -1, 1, 2])
         [self.width, self.height] = map(lambda x: max(1, x + r), [self.width, self.height])
+        # force padding <= half of kernel size
+        if 2 * self.padding > min(self.width, self.height):
+            self.padding = min(self.width // 2, self.height // 2)
 
     def mutate_stride(self):
         self.stride = max(1, self.stride + random.choice([-2, -1, 1, 2]))
 
     def mutate_padding(self):
-        # padding < half of kernel size
-        self.padding = max(1, min(self.width//2, self.height//2, self.padding + random.choice([-2, -1, 1, 2])))
+        # force padding <= half of kernel size
+        self.padding = max(0, min(self.width//2, self.height//2, self.padding + random.choice([-2, -1, 1, 2])))
 
     def mutate_random(self):
         mutations = random_choices((self.mutate_pooling, self.mutate_width, self.mutate_height, self.mutate_size,
@@ -264,12 +286,17 @@ class PoolGene(Gene):
         # force out_width > 0
         if not in_width - (self.width - 1) + 2 * self.padding > 0:
             self.width = 2 * self.padding + in_width
-            logging.debug('Mutateted width on gene %d' % self.id)
+            logging.debug('Mutated width on gene %d' % self.id)
 
         # force out_height > 0
         if not in_height - (self.height - 1) + 2 * self.height > 0:
             self.height = 2 * self.padding + in_height
-            logging.debug('Mutateted height on gene %d' % self.id)
+            logging.debug('Mutated height on gene %d' % self.id)
+
+        # force padding <= half of kernel size
+        if 2 * self.padding > min(self.width, self.height):
+            self.padding = min(self.width // 2, self.height // 2)
+            logging.debug('Mutated padding on gene %d' % self.id)
 
         out_depth = in_depth
         out_width = (in_width - (self.width - 1) + 2 * self.padding)
