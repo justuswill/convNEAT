@@ -112,7 +112,7 @@ class ADAMGene(_Optimizer):
         return self
 
     def init_log_learning_rate(self):
-        return random.normalvariate(-3, 2)
+        return random.normalvariate(-5, 2)
 
     def init_log_weight_decay(self):
         return random.normalvariate(-3, 2)

@@ -28,9 +28,3 @@ Ideas:
 - Bessere Visualisierung, Layerweise gerade verbinden
 - pool stride dial
 - better structure seperate algorithm / initialization/ data
-
-
-Genes:
-- Conv
-- Pool
-- Dense

@@ -4,10 +4,12 @@ import os
 import pickle
 import math
 import random
+import logging
 import numpy as np
 
 from KMedoids import KMedoids
 from genome import Genome
+from net import build_net_from_genome
 
 
 class Population:
@@ -15,37 +17,43 @@ class Population:
     A population of genomes to be evolved
     -----
     n                - population size
-    evaluate_genome  - how to get a score from genome
+    evaluate         - how to get a score from genome
     parent_selection - how parents are selected from the population
+    crossover        - how to combine genomes to form new ones
+    train            - how to train net nets
+    epochs           - the standard (minimum) number of epochs to train before evaluation
+    min_species_size - the lower limit to species sizes (cur. only used for spawn calculations)
     elitism_rate     - the % of best genomes to transfer ot the new generation
     load = [checkpoint_name, generation] - whether to load from a checkpoint
     monitor          - if the results should be shown graphically
     """
 
-    def __init__(self, n, evaluate_genome, parent_selection, crossover, name=None, elitism_rate=0.05,
-                 min_species_size=4, load=None, monitor=None):
+    def __init__(self, n, evaluate, parent_selection, crossover, train, input_size, output_size,
+                 name=None, elitism_rate=0.1, min_species_size=5, epochs=2, load=None, monitor=None):
         # Evolution parameters
-        self.evaluate_genome = evaluate_genome
+        self.evaluate = evaluate
         self.parent_selection = parent_selection
         self.crossover = crossover
+        self.train = train
+        self.epochs = epochs
         self.min_species_size = min_species_size
         self.elitism_rate = elitism_rate
 
-        # Plotting
+        # Plotting and tracking training progress
         self.monitor = monitor
-        # For tracking training progress
-        self.i = itertools.count()
 
         # Load instead
         if load is not None:
             self.load_checkpoint(*load)
         else:
-            self.n = n
-
             # Historical markers starting at 5
             self.id_generator = itertools.count(5)
 
+            self.input_size = input_size
+            self.output_size = output_size
+
             # Begin with only one species
+            self.n = n
             self.number_of_species = 1
             self.species = {0: [Genome(self) for _ in range(n)]}
             self.best_genome = self.species[0][0].copy()
@@ -58,7 +66,7 @@ class Population:
         return next(self.id_generator)
 
     def save_checkpoint(self):
-        save = [self.n, self.id_generator, self.number_of_species, self.generation,
+        save = [self.n, self.id_generator, self.number_of_species, self.generation, self.input_size, self.output_size,
                 self.checkpoint_name, self.top_score, (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
@@ -73,7 +81,7 @@ class Population:
     def load_checkpoint(self, checkpoint_name, generation):
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
-            [self.n, self.id_generator, self.number_of_species, self.generation,
+            [self.n, self.id_generator, self.number_of_species, self.generation, self.input_size, self.output_size,
              self.checkpoint_name, self.top_score, saved_best_genome,
              saved_genomes] = pickle.load(c)
             self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1])
@@ -86,7 +94,7 @@ class Population:
         Change the number of species if needed (-2 .. +2)
 
         #absolute clustering
-        The number of clusters is the minimum needed to achieve a score of <15
+        The number of clusters is the minimum needed to achieve a score of <20
 
         # relative clustering
         The number of cluster decreases if the score of k-1 is higher by <20%
@@ -102,7 +110,7 @@ class Population:
             for j in range(n):
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
-        # Get performance of K-Medodis for some # of clusters near k
+        # Get performance of K-Medoids for some # of clusters near k
         ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
         all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
         scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
@@ -120,10 +128,10 @@ class Population:
                 print("number of clusters increased by one")
                 k -= 1
         else:
-            while k + 1 in ids_to_check and scores[k] >= 15:
+            while k + 1 in ids_to_check and scores[k] >= 20:
                 print("number of clusters increased by one")
                 k += 1
-            while k - 1 in ids_to_check and scores[k - 1] < 15:
+            while k - 1 in ids_to_check and scores[k - 1] < 20:
                 print("number of clusters increased by one")
                 k -= 1
 
@@ -171,11 +179,9 @@ class Population:
 
         # Force n genomes
         while sum(sizes) > self.n:
-            print(sizes)
-            r = random.choice(np.where(sizes > self.min_species_size))
+            r = random.choice(list(np.where(sizes > self.min_species_size)))
             sizes[r] -= 1
         while sum(sizes) < self.n:
-            print("2", sizes)
             sizes[random.choice(range(sizes.shape[0]))] += 1
 
         return {sp: int(size) for sp, size in zip(score_by_species.keys(), sizes)}
@@ -186,15 +192,53 @@ class Population:
         Generate the next generation with selection, crossover and mutation
         """
         # Saving checkpoint
-        print("Saving checkpoint")
+        print("Saving checkpoint\n")
         self.save_checkpoint()
 
+        # show best net
+        if self.monitor is not None:
+            self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save()), kind='net-plot',
+                              input_size=self.input_size, score=self.top_score, title='best')
+
         self.cluster()
-        # Reset training progress counter
-        self.i = itertools.count()
-        evaluated_genomes_by_species = {species: sorted([(g, self.evaluate_genome(g, monitor=self.monitor))
-                                                         for g in genomes], key=lambda g: g[1], reverse=True)
-                                        for species, genomes in self.species.items()}
+
+        # Training nets
+        counter = itertools.count(1)
+        evaluated_genomes_by_species = dict()
+        for sp, genomes in self.species.items():
+            evaluated_genomes = []
+            for g in genomes:
+                i = next(counter)
+                print('Instantiating neural network from the following genome in species %d - (%d/%d):' %
+                      (sp, i, self.n))
+                print(g)
+
+                # Visualize current net
+                if self.monitor is not None:
+                    self.monitor.plot(1, (g.__class__, g.save()), kind='net-plot', title='train',
+                                      n=self.n, i=i, input_size=self.input_size)
+
+                logging.debug('Building Net')
+                net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
+                self.train(g, net, optim, criterion, epochs=self.epochs)
+                score = self.evaluate(net)
+                g.score = score
+
+                # Show best net
+                if score > self.top_score:
+                    self.top_score = score
+                    self.best_genome = g.copy()
+                    if self.monitor is not None:
+                        self.monitor.plot(0, (g.__class__, g.save()), kind='net-plot',  title='best',
+                                          input_size=(1, 28, 28), score=score)
+
+                evaluated_genomes += [(g, score)]
+            print(evaluated_genomes)
+            evaluated_genomes_by_species[sp] = sorted(evaluated_genomes, key=lambda x: x[1], reverse=True)
+
+        # Saving checkpoint with net parameters
+        print("Saving checkpoint after training\n")
+        self.save_checkpoint()
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
@@ -205,16 +249,6 @@ class Population:
                     r = r[:60] + '...' + r[-1:]
                 print('{:64}:'.format(r), s)
             print()
-
-        # show best net
-        if self.monitor is not None:
-            best_of_species = [genomes[0] for genomes in evaluated_genomes_by_species.values()]
-            best_genome, score = sorted(best_of_species, key=lambda x: x[1])[0]
-            if score > self.top_score:
-                self.top_score = score
-                self.best_genome = best_genome.copy()
-                self.monitor.plot(0, (best_genome.__class__, best_genome.save()), kind='net-plot', input_size=(1, 28, 28),
-                                  score=score, title='best')
 
         # Score of species is mean of scores
         score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
@@ -227,8 +261,12 @@ class Population:
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
             old_n_sp = len(evaluated_genomes)
             new_n_sp = new_sizes[sp]
-            elitism = min(math.floor(self.elitism_rate * old_n_sp), new_n_sp)
+            elitism = min(math.ceil(self.elitism_rate * old_n_sp), new_n_sp)
             elite_genomes = [g for g, s in evaluated_genomes[:elitism]]
+            print("%d Elites in species %d:" % (elitism, sp))
+            for g in elite_genomes:
+                print(g)
+            print()
             parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
             new_genomes = [self.crossover(p[0], p[1]) for p in parents]
             self.species[sp] = elite_genomes + new_genomes

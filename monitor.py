@@ -58,7 +58,7 @@ class Monitor:
                         if kwargs['title'] == 'train':
                             cax.title.set_text('Currently training (%d/%d):' % (kwargs['i'], kwargs['n']))
                         if kwargs['title'] == 'best':
-                            cax.title.set_text('Best net - acc: %.2f' % kwargs['score'])
+                            cax.title.set_text('Best net - acc: %.2f %%' % (100 * kwargs['score']))
                     # Other pyplot function
                     else:
                         getattr(cax, kind)(*args, **kwargs)

@@ -2,6 +2,7 @@ import functools
 import random
 import numpy as np
 import logging
+import matplotlib.pyplot as plt
 
 import torch
 import torchvision
@@ -10,7 +11,7 @@ from population import Population
 from selection import cut_off_selection, tournament_selection, fitness_proportionate_selection,\
     fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling
 from crossover import crossover
-from evaluation import evaluate_genome_on_data
+from net import train_on_data, evaluate
 from monitor import Monitor
 
 
@@ -49,7 +50,7 @@ def data_loader(torch_device):
 
 def main():
     # manually seed all random number generators for reproducible results
-    seed = 3
+    seed = 5
     random.seed(seed)
     np.random.seed(seed)
     torch.random.manual_seed(seed)
@@ -60,6 +61,9 @@ def main():
     # Load from checkpoint?
     while True:
         loading = input("load from checkpoint? [y/n]")
+        if loading == 'e':
+            explore_checkpoints()
+            break
         if loading == 'n':
             load = None
             break
@@ -70,24 +74,45 @@ def main():
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=10, name='first_test', elitism_rate=0.05, monitor=Monitor(),
-                   evaluate_genome=functools.partial(
-                       evaluate_genome_on_data,
-                       epochs=1,
+    p = Population(n=100, name='weight_test', elitism_rate=0.1, min_species_size=5, monitor=Monitor(),
+                   input_size=input_size, output_size=output_size, epochs=2,
+                   train=functools.partial(
+                       train_on_data,
                        torch_device=torch_device,
-                       data_loader_train=data_loader_train,
+                       data_loader_train=data_loader_train
+                   ),
+                   evaluate=functools.partial(
+                       evaluate,
+                       torch_device=torch_device,
                        data_loader_test=data_loader_val,
-                       input_size=input_size,
                        output_size=output_size
                    ),
                    parent_selection=functools.partial(
-                       fitness_proportionate_tournament_selection,
-                       tournament_size=3
+                       stochastic_universal_sampling,
+                       selection_percentage=0.3
                    ),
                    crossover=crossover,
                    load=load)
     for _ in range(50):
         p.evolve()
+
+
+def explore_checkpoints():
+    checkpoint = input("checkpoint name:")
+    generation = int(input("Last generation:"))
+
+    torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    data_loader_test, data_loader_train, data_loader_val, input_size, output_size = data_loader(torch_device)
+
+    fig, ax = plt.subplots()
+    for i in range(1, generation+1):
+        p = Population(1, 1, 1, 1, load=(checkpoint, i))
+        print(p.best_genome)
+        print(p.best_genome.net_parameters)
+        ax.clear()
+        p.best_genome.visualize(ax=ax, input_size=(1, 28, 28))
+        evaluate(p.best_genome, torch_device=torch_device, data_loader_test=data_loader_test, output_size=output_size)
+        plt.pause(1)
 
 
 if __name__ == '__main__':

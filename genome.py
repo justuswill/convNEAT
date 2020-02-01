@@ -28,6 +28,10 @@ class Genome:
         self.nodes, self.genes = nodes_and_genes or self.init_genome()
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
+        # These are set after training. For checkpointing and to be used by elite genomes
+        self.net_parameters = None
+        self.score = None
+
     def __repr__(self):
         r = super().__repr__()
         return (r[:-1] + ' | optimizer=%s, nodes=%s, genes=%s' %
@@ -37,11 +41,13 @@ class Genome:
         return self.population.next_id()
 
     def save(self):
-        return [(self.optimizer.__class__, self.optimizer.save()), [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
-                [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes]]
+        return [(self.optimizer.__class__, self.optimizer.save()),
+                [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
+                [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes],
+                self.net_parameters, self.score]
 
     def load(self, save):
-        saved_optimizer, saved_nodes, saved_genes = save
+        saved_optimizer, saved_nodes, saved_genes, self.net_parameters, self.score = save
         self.optimizer = saved_optimizer[0]().load(saved_optimizer[1])
         self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
         self.genes = [g[0](g[1], g[2], g[3]).load(g[4]) for g in saved_genes]
@@ -198,7 +204,7 @@ class Genome:
                 c = []
             else:
                 group += [n]
-            c += [edge.id_out for edge in self.genes if edge.id_in == n.id]
+            c += [edge.id_out for edge in self.genes if edge.id_in == n.id and edge.enabled]
         if len(group) > 0:
             grouped.append(group)
         return grouped
@@ -206,7 +212,7 @@ class Genome:
     def graph_positioning(self):
         grouped_nodes = self.group_by()
         x_steps = 1 / (len(grouped_nodes) - 1)
-        shift_list = [-0.03, 0, 0.03]
+        shift_list = [-0.03, 0, 0.02]
         pos = dict()
         for i, group in enumerate(grouped_nodes):
             shift = shift_list[i % len(shift_list)]
