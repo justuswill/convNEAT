@@ -148,8 +148,8 @@ class Genome:
                 [n1, n2] = random.sample(self.nodes, 2)
                 if n1.depth > n2.depth:
                     n1, n2 = n2, n1
-                # only if edge doesn't exist
-                if [n1.id, n2.id] in [[e.id_in, e.id_out] for e in self.genes]:
+                # only if this is a feed-forward edge that does exist
+                if n1.depth == n2.depth or [n1.id, n2.id] in [[e.id_in, e.id_out] for e in self.genes]:
                     tries -= 1
                     continue
                 id = self.next_id()
