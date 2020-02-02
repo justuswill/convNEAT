@@ -124,15 +124,20 @@ class Genome:
         if len(disabled) > 0:
             random.choice(disabled).enabled = True
 
-    def split_edge(self):
+    def split_edge(self, this_gen_mutations):
         enabled = [gene for gene in self.genes if gene.enabled]
         if len(enabled) > 0:
             edge = random.choice(enabled)
             [d1, d2] = [self.nodes_by_id[edge.id_in].depth, self.nodes_by_id[edge.id_out].depth]
-            [id1, id2, id3] = [f() for f in [self.next_id]*3]
+
+            # Save innovation numbers
+            if edge not in this_gen_mutations:
+                this_gen_mutations[edge] = [f() for f in [self.next_id]*3]
+            [id1, id2, id3] = this_gen_mutations[edge]
+
             edge.enabled = False
             # Guarantee d1<dn<d2 and no duplicates with cut-off normalvariate
-            new_node = Node(id1, min(d2+(d1+d2)/10, max(d1-(d1+d2)/10, random.normalvariate((d1 + d2) / 2, 0.0001))))
+            new_node = Node(id1, min(d2+(d1+d2)/10, max(d1-(d1+d2)/10, random.normalvariate((d1 + d2) / 2, 0.01))))
             new_edge_1 = edge.copy(id2, edge.id_in, new_node.id)
             new_edge_2 = edge.add_after(id3, new_node.id, edge.id_out)
             self.nodes += [new_node]
@@ -158,10 +163,11 @@ class Genome:
                 self.genes_by_id[id] = new_edge
                 break
 
-    def mutate_random(self):
+    def mutate_random(self, this_gen_mutations):
         mutations = random_choices((lambda: self.mutate_genes(0.5), lambda: self.mutate_nodes(0.2),
-                                    self.mutate_optimizer,
-                                    self.mutate_disable_edge, self.enable_edge, self.split_edge, self.add_edge),
+                                    self.mutate_optimizer, self.mutate_disable_edge, self.enable_edge,
+                                    lambda x=this_gen_mutations: self.split_edge(this_gen_mutations=this_gen_mutations),
+                                    self.add_edge),
                                    (1, 1, 1, 0.1, 0.1, 0.7, 0.3))
         for mutate in mutations:
             mutate()
@@ -225,6 +231,8 @@ class Genome:
         """
         calculate the sizes of all convolutional,etc... nodes and set them for
         plotting and building the net, if no input_size is given reset every node size
+        target_size is the size before node postprocessing (like flatten) and will be plotted
+        size        is the size after node postprocessing
         """
         for node in self.nodes:
             node.size = None
@@ -232,6 +240,7 @@ class Genome:
             return
         nodes = sorted(self.nodes, key=lambda x: x.depth)
         self.nodes_by_id[0].size = input_size
+        self.nodes_by_id[0].target_size = input_size
         outputs_by_id = {0: input_size}
         for node in nodes:
             # All reachable incoming edges that are enabled
