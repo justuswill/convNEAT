@@ -6,17 +6,13 @@ Problems:
 
 Enhancements:
 - Nutzung von Early-Stopping-Verfahren
-- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten
+- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten (Testen)
 (z.B. Parameter Layer-weise zwischenspeichern, neu initialisieren nur
 selten und natürlich bei neu hinzugefügten Layern)
-- Besseres Auswahlverfahren für überlebende / zu mutierende Netze
-(ähnlich wie NEAT), dabei neue bzw. weniger trainierte Netze schützen
-(Trainingsfortschritt in Ähnlichkeitsfunktion einbauen)
-- Möglicherweise den Suchraum um neue Neuronale-Netz-Architekturen erweitern
+- Trainingsfortschritt in Ähnlichkeitsfunktion einbauen
 
 Ideas:
 - inter-gene crossover
-- Different optimizer genes + hyperparameters
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty
 - Every gene has a detail to its weight. e+v of all weights, e+v in regions (e.g. col,row,blocks), all weights
@@ -28,3 +24,5 @@ Ideas:
 - Bessere Visualisierung, Layerweise gerade verbinden
 - pool stride dial
 - better structure seperate algorithm / initialization/ data
+- plotting pipeline
+- init for clustering
