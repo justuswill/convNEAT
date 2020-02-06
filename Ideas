@@ -1,14 +1,7 @@
-Problems:
-- Die Bewertung erfolgt erst nach Abschluss des gesamten Trainingsvorgangs, was enorm zeitaufwendig ist
-- Der Trainingsfortschritt bleibt nicht von Generation zu Generation erhalten, in jeder Generation werden die Netze neu zufällig initialisiert
-- Neue Netze werden oft schon nach einer Iteration wieder verworfen, da sie nicht die Zeit haben entwickelt zu werden
-  und bei der Bewertung dementsprechend schlecht abschneiden
-
 Enhancements:
 - Nutzung von Early-Stopping-Verfahren
-- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten (Testen)
-(z.B. Parameter Layer-weise zwischenspeichern, neu initialisieren nur
-selten und natürlich bei neu hinzugefügten Layern)
+- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten (Muss noch getestet werden für die einzelnen Gene)
+  Alles Zwischenspeichern zu viel Platz (nur Elite genomes)
 - Trainingsfortschritt in Ähnlichkeitsfunktion einbauen
 
 Ideas:
@@ -17,12 +10,17 @@ Ideas:
   More training -> higher penalty
 - Every gene has a detail to its weight. e+v of all weights, e+v in regions (e.g. col,row,blocks), all weights
   Higher detail -> higher penalty
-- Mutation chances change dynamically (What works?)
-(-) dilation, bias
+- Mutation chances change dynamically (What works gets boosted)
+(-) dilation, bias for Kernel
 (-) Mutation exception/variance
     Same for the selection of what genes to mutate
-- Bessere Visualisierung, Layerweise gerade verbinden
-- pool stride dial
-- better structure seperate algorithm / initialization/ data
+- stride dial for Pooling
+(-) better structure seperate algorithm / initialization/ data
 - plotting pipeline
-- init for clustering
+- init for clustering, use old centers as start for Kmedoids
+
+Todo:
+- Viele Testläufe um gute Werte zu finden für:
+   - Elitism
+   - Selection
+   - ...
