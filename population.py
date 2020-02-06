@@ -258,6 +258,8 @@ class Population:
         new_sizes = self.new_species_sizes(score_by_species)
 
         print("Breading new neural networks")
+        # Same mutation (split_edge) in a gen get the same innovation number
+        this_gen_mutations = dict()
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
             old_n_sp = len(evaluated_genomes)
             new_n_sp = new_sizes[sp]
@@ -268,7 +270,7 @@ class Population:
                 print(g)
             print()
             parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
-            new_genomes = [self.crossover(p[0], p[1]) for p in parents]
+            new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
 
         self.generation += 1

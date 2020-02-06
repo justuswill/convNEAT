@@ -34,7 +34,7 @@ class Node:
                                                              ', size=%s' % str(self.size) or '')
 
     def short_repr(self):
-        return '' if self.size is None else '%dx%dx%d' % (self.size[0], self.size[1], self.size[2])
+        return '' if self.target_size is None else '%dx%dx%d' % tuple(map(lambda i: self.target_size[i], [0, 1, 2]))
 
     def save(self):
         return [self.role, self.merge, self.size, self.target_size]

@@ -52,4 +52,4 @@ def crossover(genome1, genome2, more_fit_crossover_rate=0.8, less_fit_crossover_
     for _id in disabled_ids:
         child_genome.disable_edge(child_genome.genes_by_id[_id])
 
-    return child_genome.mutate_random()
+    return child_genome
