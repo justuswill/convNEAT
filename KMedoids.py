@@ -143,7 +143,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
         self._check_nonnegative_int(self.max_iter, "max_iter")
 
         # Check init
-        init_methods = ["random", "heuristic", "k-medoids++"]
+        init_methods = ["random", "heuristic", "k-medoids++", "old"]
         if self.init not in init_methods:
             raise ValueError(
                 "init needs to be one of "
@@ -151,7 +151,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
                 + "%s" % init_methods
             )
 
-    def fit(self, X, y=None):
+    def fit(self, X, old_centers=None):
         """Fit K-Medoids to the provided data.
 
         Parameters
@@ -179,7 +179,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
 
         D = pairwise_distances(X, metric=self.metric)
         medoid_idxs = self._initialize_medoids(
-            D, self.n_clusters, random_state_
+            D, self.n_clusters, random_state_, old_centers=old_centers
         )
         labels = None
 
@@ -325,7 +325,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
 
         return inertia
 
-    def _initialize_medoids(self, D, n_clusters, random_state_):
+    def _initialize_medoids(self, D, n_clusters, random_state_, old_centers=None):
         """Select initial mediods when beginning clustering."""
 
         if self.init == "random":  # Random initialization
@@ -333,6 +333,8 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
             medoids = random_state_.choice(len(D), n_clusters)
         elif self.init == "k-medoids++":
             medoids = self._kpp_init(D, n_clusters, random_state_)
+        elif self.init == "old":
+            medoids = self._from_old_centers(D, n_clusters, random_state_, old_centers)
         elif self.init == "heuristic":  # Initialization by heuristic
             # Pick K first data points that have the smallest sum distance
             # to every other point. These are the initial medoids.
@@ -429,3 +431,14 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
             closest_dist_sq = best_dist_sq
 
         return centers
+
+    def _from_old_centers(self, D, n_clusters, random_state_, old_centers):
+        """
+        Use old centers as a starting point
+        add random clusters if less than n_clusters
+        deletecenters with smallest cluster if more than n_clusters
+        """
+
+        if old_centers is None or len(old_centers) == 0:
+            raise ValueError("Old centers should be a nonempty list")
+

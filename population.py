@@ -110,9 +110,21 @@ class Population:
             for j in range(n):
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
+        # Get centers of old species
+        # current labels for all_genomes
+        labels = [i for i, genomes in self.species.items() for g in genomes]
+        for i in range(k):
+            in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
+
+            score += np.min(in_cluster_scores)
+        return score / (k * self.n)
+
+
         # Get performance of K-Medoids for some # of clusters near k
+
         ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
-        all_labels = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances).labels_ for i in ids_to_check}
+        medoids = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances) for i in ids_to_check}
+        all_labels = {medoid.labels_ for medoid in medoids}
         scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
 
         # Plot clustering performance
