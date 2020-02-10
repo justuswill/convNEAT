@@ -41,7 +41,6 @@ class Monitor:
                 cax = ax[recv[0]]
                 args = recv[1]
                 kwargs = recv[2]
-
                 # clear except title
                 add = kwargs.pop('add', False)
                 if not add:
@@ -54,11 +53,12 @@ class Monitor:
                     if kind == 'net-plot':
                         str_genome = args[0]
                         genome = str_genome[0](0).load(str_genome[1])
-                        genome.visualize(cax, input_size=kwargs['input_size'])
-                        if kwargs['title'] == 'train':
-                            cax.title.set_text('Currently training (%d/%d):' % (kwargs['i'], kwargs['n']))
-                        if kwargs['title'] == 'best':
-                            cax.title.set_text('Best net - acc: %.2f %%' % (100 * kwargs['score']))
+                        title = kwargs.pop('title')
+                        if title == 'train':
+                            cax.title.set_text('Currently training (%d/%d):' % (kwargs.pop('i'), kwargs.pop('n')))
+                        elif title == 'best':
+                            cax.title.set_text('Best net - acc: %.2f %%' % (100 * kwargs.pop('score')))
+                        genome.visualize(cax, **kwargs)
                     # Other pyplot function
                     else:
                         getattr(cax, kind)(*args, **kwargs)
