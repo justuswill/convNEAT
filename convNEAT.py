@@ -74,8 +74,8 @@ def main():
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=50, name='weight_test', elitism_rate=0.1, min_species_size=5, monitor=Monitor(),
-                   input_size=input_size, output_size=output_size, epochs=2,
+    p = Population(n=100, name='cluster_test', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
+                   input_size=input_size, output_size=output_size, epochs=5,
                    train=functools.partial(
                        train_on_data,
                        torch_device=torch_device,

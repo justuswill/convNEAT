@@ -48,6 +48,7 @@ class Population:
         else:
             # Historical markers starting at 5
             self.id_generator = itertools.count(5)
+            self.species_id_generator = itertools.count(1)
 
             self.input_size = input_size
             self.output_size = output_size
@@ -66,8 +67,9 @@ class Population:
         return next(self.id_generator)
 
     def save_checkpoint(self):
-        save = [self.n, self.id_generator, self.number_of_species, self.generation, self.input_size, self.output_size,
-                self.checkpoint_name, self.top_score, (self.best_genome.__class__, self.best_genome.save()),
+        save = [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
+                self.input_size, self.output_size, self.checkpoint_name, self.top_score,
+                (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
 
@@ -81,8 +83,8 @@ class Population:
     def load_checkpoint(self, checkpoint_name, generation):
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
-            [self.n, self.id_generator, self.number_of_species, self.generation, self.input_size, self.output_size,
-             self.checkpoint_name, self.top_score, saved_best_genome,
+            [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
+             self.input_size, self.output_size, self.checkpoint_name, self.top_score, saved_best_genome,
              saved_genomes] = pickle.load(c)
             self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1])
             self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
@@ -102,7 +104,10 @@ class Population:
         """
         k = self.number_of_species
         n = self.n
-        all_genomes = [g for genomes in self.species.values() for g in genomes]
+
+        # Sorted after species size
+        sorted_species_ids = sorted(self.species.keys(), key=lambda i: len(self.species.get(i)))
+        all_genomes = [g for i in sorted_species_ids for g in self.species[i]]
 
         # Distance matrix
         distances = np.zeros((n, n))
@@ -111,21 +116,21 @@ class Population:
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
         # Get centers of old species
-        # current labels for all_genomes
-        labels = [i for i, genomes in self.species.items() for g in genomes]
+        species_len = [len(self.species[i]) for i in sorted_species_ids]
+        cumlen = np.cumsum([0] + species_len)
+        cur_centers = []
+        labels = np.array([i for i in sorted_species_ids for _ in self.species[i]])
         for i in range(k):
             in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
-
-            score += np.min(in_cluster_scores)
-        return score / (k * self.n)
+            cur_centers += [np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]]
 
 
         # Get performance of K-Medoids for some # of clusters near k
-
         ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
-        medoids = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances) for i in ids_to_check}
-        all_labels = {medoid.labels_ for medoid in medoids}
-        scores = {i: self.cluster_score(distances, lab) for i, lab in all_labels.items()}
+        medoids = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances, old_centers=cur_centers)
+                   for i in ids_to_check}
+        all_labels = {i: medoid.labels_ for i, medoid in medoids.items()}
+        scores = {i: medoid.score_ for i, medoid in medoids.items()}
 
         # Plot clustering performance
         if self.monitor is not None:
@@ -136,21 +141,25 @@ class Population:
             while k + 1 in ids_to_check and scores[k + 1] < 0.5 * scores[k]:
                 print("number of clusters increased by one")
                 k += 1
+                sorted_species_ids += [next(self.species_id_generator)]
             while k - 1 in ids_to_check and scores[k - 1] < 1.20 * scores[k]:
                 print("number of clusters increased by one")
                 k -= 1
         else:
-            while k + 1 in ids_to_check and scores[k] >= 20:
+            while k + 1 in ids_to_check and scores[k] >= 1500:
                 print("number of clusters increased by one")
                 k += 1
-            while k - 1 in ids_to_check and scores[k - 1] < 20:
+                sorted_species_ids += [next(self.species_id_generator)]
+            while k - 1 in ids_to_check and scores[k - 1] < 1500:
                 print("number of clusters increased by one")
                 k -= 1
 
         # Save new Clustering
         self.number_of_species = k
-        labels = all_labels[k]
-        self.species = {i: [] for i in range(k)}
+        # Use old identifiers for clusters
+        labels = [sorted_species_ids[i] for i in all_labels[k]]
+
+        self.species = {i: [] for i in sorted_species_ids if i in labels}
         for i, g in enumerate(all_genomes):
             self.species[labels[i]] += [g]
 
@@ -162,24 +171,6 @@ class Population:
             for s, e in zip(species_len[:-1], species_len[1:]):
                 self.monitor.plot(3, np.array([s, s, e, e, s]) - 0.5, np.array([s, e, e, s, s]) - 0.5,
                                   c='red', linewidth=1.5, add=True)
-
-    def cluster_score(self, distances, labels):
-        """
-        Computes the score of a k-clustering by finding the best cluster-center xi for each cluster i
-        and than calculating 1/k * sum(i=0, k, sum(j in cluster i, dist(j, xi)^2))
-        normalized by number of genomes in the population
-
-        Input:
-        distance metric for the n points
-        labels for the n points
-        """
-        k = max(labels) + 1
-        score = 0
-        for i in range(k):
-            in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
-            in_cluster_scores = np.sum(in_cluster_distances ** 2, axis=1)
-            score += np.min(in_cluster_scores)
-        return score / (k*self.n)
 
     def new_species_sizes(self, score_by_species):
         """
