@@ -40,7 +40,7 @@ class SGDGene(_Optimizer):
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] + "log_learning_rate=%.2f, mom=%.2f, log_weight_decay=%.2f" %
+        return (r[:-1] + " | log_learning_rate=%.2f, mom=%.2f, log_weight_decay=%.2f" %
                 (self.log_learning_rate, self.momentum, self.log_weight_decay) + r[-1:])
 
     def save(self):
