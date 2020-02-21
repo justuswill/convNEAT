@@ -186,6 +186,8 @@ class KernelGene(Gene):
                           depth_size_change=self.depth_size_change, depth_mult=self.depth_mult)
 
     def dissimilarity(self, other):
+        if not isinstance(other, self.__class__):
+            return 1
         dist = np.array([self.height - other.height, self.width - other.width,
                          self.stride - other.stride, self.padding - other.padding,
                          self.depth_size_change - other.depth_size_change, self.depth_mult - other.depth_mult])
@@ -308,6 +310,8 @@ class PoolGene(Gene):
                         size=[self.width, self.height], pooling=self.pooling, padding=self.padding, stride=self.stride)
 
     def dissimilarity(self, other):
+        if not isinstance(other, self.__class__):
+            return 1
         dist = np.array([self.height - other.height, self.width - other.width,
                          self.stride - other.stride, self.padding - other.padding,
                          self.pooling != other.pooling])
@@ -378,6 +382,8 @@ class DenseGene(Gene):
                          size_change=self.size_change, activation=self.activation)
 
     def dissimilarity(self, other):
+        if not isinstance(other, self.__class__):
+            return 1
         dist = np.array([self.size_change - other.size_change,
                          self.activation != other.activation])
         importance = np.array([0.6, 0.4])

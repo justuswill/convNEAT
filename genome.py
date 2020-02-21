@@ -32,6 +32,10 @@ class Genome:
         self.net_parameters = None
         self.score = None
 
+        # Early stopping etc.
+        self.trained = 0
+        self.epochs_no_improvement = 0
+
     def __repr__(self):
         r = super().__repr__()
         return (r[:-1] + ' | optimizer=%s, nodes=%s, genes=%s' %
@@ -40,14 +44,20 @@ class Genome:
     def next_id(self):
         return self.population.next_id()
 
-    def save(self):
-        return [(self.optimizer.__class__, self.optimizer.save()),
-                [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
-                [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes],
-                self.net_parameters, self.score]
+    def save(self, parameters=True):
+        saved = [(self.optimizer.__class__, self.optimizer.save()),
+                 [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
+                 [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes], self.score]
+        if parameters:
+            saved += [self.net_parameters]
+        return saved
 
     def load(self, save):
-        saved_optimizer, saved_nodes, saved_genes, self.net_parameters, self.score = save
+        if len(save) == 5:
+            saved_optimizer, saved_nodes, saved_genes, self.score, self.net_parameters = save
+        else:
+            saved_optimizer, saved_nodes, saved_genes, self.score = save
+            self.net_parameters = None
         self.optimizer = saved_optimizer[0]().load(saved_optimizer[1])
         self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
         self.genes = [g[0](g[1], g[2], g[3]).load(g[4]) for g in saved_genes]
@@ -131,9 +141,9 @@ class Genome:
             [d1, d2] = [self.nodes_by_id[edge.id_in].depth, self.nodes_by_id[edge.id_out].depth]
 
             # Save innovation numbers
-            if edge not in this_gen_mutations:
-                this_gen_mutations[edge] = [f() for f in [self.next_id]*3]
-            [id1, id2, id3] = this_gen_mutations[edge]
+            if edge.id not in this_gen_mutations:
+                this_gen_mutations[edge.id] = [f() for f in [self.next_id]*3]
+            [id1, id2, id3] = this_gen_mutations[edge.id]
 
             edge.enabled = False
             # Guarantee d1<dn<d2 and no duplicates with cut-off normalvariate
@@ -175,8 +185,9 @@ class Genome:
 
     def visualize(self, ax, input_size=None, dbug=False):
         self.set_sizes(input_size)
+        # Enabled and reachable edges
         edgelist = ['%d %d {\'class\':\'%s\'}' % (e.id_in, e.id_out, str(type(e)).split('.')[-1][:-2])
-                    for e in self.genes if e.enabled]
+                    for e in self.genes if e.enabled and self.nodes_by_id[e.id_in].target_size is not None]
         G = nx.parse_edgelist(edgelist)
         edge_color_dict = {'DenseGene': 'green', 'KernelGene': 'darkorange', 'PoolGene': 'darkblue'}
         node_color_dict = {None: 'skyblue', 'flatten': 'salmon', 'input': 'turquoise', 'output': 'turquoise'}

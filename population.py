@@ -43,6 +43,8 @@ class Population:
 
         # Plotting and tracking training progress
         self.monitor = monitor
+        # On the go plotting of species score
+        self.polygons = dict()
 
         # Load instead
         if load is not None:
@@ -63,6 +65,7 @@ class Population:
             self.top_score = 0
             self.history = []
 
+            # Metadata
             self.generation = 1
             self.checkpoint_name = name or time.strftime("%d.%m-%H:%M")
 
@@ -93,17 +96,19 @@ class Population:
             self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
-    def cluster(self, relative=False):
+    def cluster(self, threshold=1500, rel_threshold=[1.2, 0.5]):
         """
         Cluster the genomes with K_Medoids-Clustering
         Change the number of species if needed (-2 .. +2)
 
-        # absolute clustering
-        The number of clusters is the minimum needed to achieve a score of <1500
+        The number of clusters is less than the minimum needed to achieve a score below <threshold>.
+        i.e. the clustering always scores above <threshold>
+        This is to avoid small clusters, 1500 is good value for 50-100 genomes
 
-        # relative clustering
-        The number of cluster decreases if the score of k-1 is higher by <20%
-        The number of cluster decreases if the score of k+1 is smaller by >50%
+        Additionally,
+        the number of cluster decreases if the score of k-1 is higher by <20%
+        the number of cluster increases if the score of k+1 is smaller by >50%
+        These numbers can be set.
         """
         k = self.number_of_species
         n = self.n
@@ -138,23 +143,14 @@ class Population:
         logging.info("Scores for  clustering:\n" +
                      ", ".join(["%s: %s" % (sp, sc) for sp, sc in zip(ids_to_check, list(scores.values()))]))
 
-        if relative:
-            # Change number of clusters
-            while k + 1 in ids_to_check and scores[k + 1] < 0.5 * scores[k]:
-                print("number of clusters increased by one")
-                k += 1
-                sorted_species_ids += [next(self.species_id_generator)]
-            while k - 1 in ids_to_check and scores[k - 1] < 1.20 * scores[k]:
-                print("number of clusters increased by one")
-                k -= 1
-        else:
-            while k + 1 in ids_to_check and scores[k] >= 1500:
-                print("number of clusters increased by one")
-                k += 1
-                sorted_species_ids += [next(self.species_id_generator)]
-            while k - 1 in ids_to_check and scores[k - 1] < 1500:
-                print("number of clusters increased by one")
-                k -= 1
+        # Change number of clusters
+        while k + 1 in ids_to_check and threshold <= scores[k + 1] < rel_threshold[1] * scores[k]:
+            print("number of clusters increased by one")
+            k += 1
+            sorted_species_ids += [next(self.species_id_generator)]
+        while k - 1 in ids_to_check and scores[k - 1] < min(rel_threshold[0] * scores[k], threshold):
+            print("number of clusters increased by one")
+            k -= 1
 
         # Save new Clustering
         self.number_of_species = k
@@ -171,53 +167,75 @@ class Population:
                           for species, genomes in sorted(self.species.items(), key=lambda x: x[0], reverse=True)}]
 
         if self.monitor is not None:
-            # Plot distance matrix after clustering with cluster boxes
-            species_len = np.cumsum([0] + [len(g) for g in self.species.values()])
-            ind = np.argsort(labels)
-            self.monitor.plot(3, distances[np.ix_(ind, ind)], kind='imshow', clear=True)
-            for s, e in zip(species_len[:-1], species_len[1:]):
-                self.monitor.plot(3, np.array([s, s, e, e, s]) - 0.5, np.array([s, e, e, s, s]) - 0.5,
-                                  c='red', linewidth=1.5)
-            self.monitor.send()
+            self.distance_plot(labels, distances)
+            self.species_plot()
 
-            # Plot Species over Generation plot
-            self.monitor.plot(2, clear=True)
-            scores = [np.array([sc for _, sc in hist.values()]) for hist in self.history[:-1]]
-            lens = [[len_ for len_, _ in hist.values()] for hist in self.history]
-            cumlens = [np.cumsum([0] + l) for l in lens]
-            sp_ids = [hist.keys() for hist in self.history]
-            pos = [{sp: pos for sp, pos in zip(sp_id, cumlen)} for sp_id, cumlen in zip(sp_ids, cumlens)]
-            if len(pos) == 1:
-                pos = [{0: 100}] + pos
-                sp_ids = [pos[0].keys()] + sp_ids
-            print(pos, sp_ids)
-            for i in range(len(pos) - 1):
-                connections = [[pos[i][sp], pos[i+1][sp]] for sp in sp_ids[i] & sp_ids[i+1]]
-                new_sp = [[pos[i][max([p for p in sp_ids[i] if p < sp])] if min(sp_ids[i]) < sp else max(cumlens[i]),
-                           pos[i+1][sp]]
-                          for sp in sp_ids[i+1] - sp_ids[i]]
-                dead_sp = [[pos[i][sp], pos[i+1][max([p for p in sp_ids[i+1] if p < sp])]
-                            if min(sp_ids[i+1]) < sp else self.n]
-                           for sp in sp_ids[i] - sp_ids[i+1]]
-                lines = [[self.n, self.n]] + connections + new_sp + dead_sp
-                # Plot scores
-                if i < len(scores):
-                    patches = []
-                    for sp in sp_ids[i+1]:
-                        base = [sp if sp in sp_ids[i] else max([p for p in sp_ids[i] if p < sp])
-                                if min(sp_ids[i]) < sp else self.n, sp]
-                        bel = [pos[i][base[0]], pos[i+1][base[1]]]
-                        abv = list(map(lambda x: pos[x][max([p for p in sp_ids[x] if p < sp])]
-                                       if min(sp_ids[x]) < sp else self.n, [i, i+1]))
-                        polygon = Polygon([[i, bel[0]], [i, abv[0]], [i+1, abv[1]], [i+1, bel[1]]], True)
-                        patches.append(polygon)
-                    p = PatchCollection(patches, cmap='viridis', alpha=0.4)
-                    colors = scores[i]**3
-                    p.set_array(np.array(colors))
+    def distance_plot(self, labels, distances):
+        """
+        Plot the pairwise distances between all genomes in the population
+        Blue means similar, green/yellow means less similar
+        Genomes are ordered by cluster and clusters are shown with red squares
+        """
+        species_len = np.cumsum([0] + [len(g) for g in self.species.values()])
+        ind = np.argsort(labels)
+        self.monitor.plot(3, distances[np.ix_(ind, ind)], kind='imshow', clear=True)
+        for s, e in zip(species_len[:-1], species_len[1:]):
+            self.monitor.plot(3, np.array([s, s, e, e, s]) - 0.5, np.array([s, e, e, s, s]) - 0.5,
+                              c='red', linewidth=1.5)
+        self.monitor.send()
 
-                    self.monitor.plot(2, p, kind='add_collection')
-                self.monitor.plot(2, [i, i+1], [[l for l, _ in lines], [l for _, l in lines]], c='darkblue')
-            self.monitor.send()
+    def species_plot(self):
+        """
+        Plot species sizes and their performance.
+        x-axis shows the generations
+        y-axis how big each species was in that generation
+        the color of the shape from t-1 to t shows the score in Generation t
+        """
+        # Clear
+        self.polygons = dict()
+        self.monitor.plot(2, clear=True)
+
+        scores = [np.array([sc for _, sc in hist.values()]) for hist in self.history[:-1]]
+        lens = [[len_ for len_, _ in hist.values()] for hist in self.history]
+        cumlens = [np.cumsum([0] + l) for l in lens]
+        sp_ids = [hist.keys() for hist in self.history]
+        pos = [{0: self.n}] + [{sp: pos for sp, pos in zip(sp_id, cumlen)} for sp_id, cumlen in zip(sp_ids, cumlens)]
+        sp_ids = [pos[0].keys()] + sp_ids
+
+        # For every generation
+        for i in range(len(pos) - 1):
+            # survived species
+            connections = [[pos[i][sp], pos[i + 1][sp]] for sp in sp_ids[i] & sp_ids[i + 1]]
+            # new species
+            new_sp = [[pos[i][max([p for p in sp_ids[i] if p < sp])] if min(sp_ids[i]) < sp else max(cumlens[i]),
+                       pos[i + 1][sp]]
+                      for sp in sp_ids[i + 1] - sp_ids[i]]
+            # killed species
+            dead_sp = [[pos[i][sp], pos[i + 1][max([p for p in sp_ids[i + 1] if p < sp])]
+            if min(sp_ids[i + 1]) < sp else self.n]
+                       for sp in sp_ids[i] - sp_ids[i + 1]]
+            lines = [[self.n, self.n]] + connections + new_sp + dead_sp
+            # Plot scores
+            patches = []
+            for sp in sp_ids[i + 1]:
+                base = [sp if sp in sp_ids[i] else max([p for p in sp_ids[i] if p < sp])
+                        if min(sp_ids[i]) < sp else self.n, sp]
+                bel = [pos[i][base[0]], pos[i + 1][base[1]]]
+                abv = list(map(lambda x: pos[x][max([p for p in sp_ids[x] if p < sp])]
+                               if min(sp_ids[x]) < sp else self.n, [i, i + 1]))
+                polygon = Polygon([[i, bel[0]], [i, abv[0]], [i + 1, abv[1]], [i + 1, bel[1]]], True)
+                patches.append(polygon)
+                # If no score yet, fill later
+                if i == len(scores):
+                    self.polygons.update({sp: polygon})
+            # If score, plot now
+            if i < len(scores):
+                p = PatchCollection(patches, cmap='viridis', alpha=0.4)
+                colors = scores[i] ** 3
+                p.set_array(np.array(colors))
+                self.monitor.plot(2, p, kind='add_collection')
+            self.monitor.plot(2, [i, i + 1], [[l for l, _ in lines], [l for _, l in lines]], c='darkblue')
+        self.monitor.send()
 
     def new_species_sizes(self, score_by_species):
         """
@@ -236,25 +254,18 @@ class Population:
 
         return {sp: int(size) for sp, size in zip(score_by_species.keys(), sizes)}
 
-    def evolve(self):
+    def train_nets(self):
         """
-        Group the genomes to species and evaluate them on training data
-        Generate the next generation with selection, crossover and mutation
+        Train a instantiated net for every genome in the population
+        Evaluate every net and return the scored genomes and species
+
+        Updates plots for best and current net and fill scores of species
+        Saves the net with its parameters for continuation of training later on (used by elites)
+        Also saves weights in every gene as start for child genomes
         """
-        # Saving checkpoint
-        print("Saving checkpoint\n")
-        self.save_checkpoint()
-
-        # show best net
-        if self.monitor is not None:
-            self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save()), kind='net-plot',
-                              input_size=self.input_size, score=self.top_score, title='best', clear=True, show=True)
-
-        self.cluster()
-
-        # Training nets
         counter = itertools.count(1)
         evaluated_genomes_by_species = dict()
+        score_by_species = dict()
         for sp, genomes in self.species.items():
             evaluated_genomes = []
             for g in genomes:
@@ -265,7 +276,7 @@ class Population:
 
                 # Visualize current net
                 if self.monitor is not None:
-                    self.monitor.plot(1, (g.__class__, g.save()), kind='net-plot', title='train',
+                    self.monitor.plot(1, (g.__class__, g.save(parameters=False)), kind='net-plot', title='train',
                                       n=self.n, i=i, input_size=self.input_size, clear=True, show=True)
 
                 logging.debug('Building Net')
@@ -279,12 +290,40 @@ class Population:
                     self.top_score = score
                     self.best_genome = g.copy()
                     if self.monitor is not None:
-                        self.monitor.plot(0, (g.__class__, g.save()), kind='net-plot',  title='best',
+                        self.monitor.plot(0, (g.__class__, g.save(parameters=False)), kind='net-plot', title='best',
                                           input_size=(1, 28, 28), score=score, clear=True, show=True)
 
                 evaluated_genomes += [(g, score)]
-            print(evaluated_genomes)
+
             evaluated_genomes_by_species[sp] = sorted(evaluated_genomes, key=lambda x: x[1], reverse=True)
+            sp_scores = [s for g, s in evaluated_genomes]
+            # Score of species is the mean of their genomes' scores
+            score_by_species[sp] = sum(sp_scores) / len(sp_scores)
+
+            # Fill species plot
+            if self.monitor is not None:
+                p = PatchCollection([self.polygons[sp]], cmap='viridis', alpha=0.4)
+                colors = [score_by_species[sp]**3]
+                p.set_array(np.array(colors))
+                self.monitor.plot(2, p, kind='add_collection')
+        return [evaluated_genomes_by_species, score_by_species]
+
+    def evolve(self):
+        """
+        Group the genomes to species and evaluate them on training data
+        Generate the next generation with selection, crossover and mutation
+        """
+        # Saving checkpoint
+        print("Saving checkpoint\n")
+        self.save_checkpoint()
+
+        # show best net
+        if self.monitor is not None:
+            self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save(parameters=False)), kind='net-plot',
+                              input_size=self.input_size, score=self.top_score, title='best', clear=True, show=True)
+
+        self.cluster()
+        evaluated_genomes_by_species, score_by_species = self.train_nets()
 
         # Saving checkpoint with net parameters
         print("Saving checkpoint after training\n")
@@ -299,10 +338,6 @@ class Population:
                     r = r[:60] + '...' + r[-1:]
                 print('{:64}:'.format(r), s)
             print()
-
-        # Score of species is mean of scores
-        score_by_species = {species: sum([s for g, s in genomes]) / len(genomes)
-                            for species, genomes in evaluated_genomes_by_species.items()}
 
         # Update History
         for sp, sc in score_by_species.items():

@@ -5,6 +5,11 @@ Enhancements:
 - Trainingsfortschritt in Ähnlichkeitsfunktion einbauen
 
 Ideas:
+- fill polygons one by one
+- species death + adoption
+- manually delete to small species after clustering
+- restructure genomes for distance plot
+- better cluster trehhold
 - inter-gene crossover
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty

@@ -208,7 +208,7 @@ class Net(torch.nn.Module):
                     in_features=int(np.prod(node.target_size)),
                     out_features=output_size
                 )
-                self.add_module('dense_%03d' % gene.id, dense)
+                self.add_module('dense_out_%03d' % gene.id, dense)
                 self.modules_by_id[node.id] += \
                     [lambda x: torch.reshape(x, [x.shape[0], 1, 1, int(np.prod(x.shape[1:4]))]),
                      dense,

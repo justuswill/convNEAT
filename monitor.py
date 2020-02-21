@@ -46,6 +46,7 @@ class Monitor:
         ax[2].set_xlabel("Generation")
         ax[2].set_ylabel("# of genomes")
         ax[3].title.set_text('Distance matrix')
+        plt.show()
 
         while True:
             # if there is something new
@@ -79,6 +80,4 @@ class Monitor:
                     # ax.plot
                     elif len(args) > 0:
                         cax.plot(*args, **kwargs)
-                    # Take time to let __main__ process reach next monitor call
-                    plt.pause(0.1)
-            plt.pause(update)
+            fig.canvas.start_event_loop(update)
