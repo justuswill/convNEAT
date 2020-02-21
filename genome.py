@@ -33,13 +33,14 @@ class Genome:
         self.score = None
 
         # Early stopping etc.
+        self.loss = float('inf')
         self.trained = 0
-        self.epochs_no_improvement = 0
+        self.no_change = 0
 
     def __repr__(self):
         r = super().__repr__()
-        return (r[:-1] + ' | optimizer=%s, nodes=%s, genes=%s' %
-                (self.optimizer, self.nodes, self.genes) + r[-1:])
+        return (r[:-1] + ' | trained=%d, optimizer=%s, nodes=%s, genes=%s' %
+                (self.trained, self.optimizer, self.nodes, self.genes) + r[-1:])
 
     def next_id(self):
         return self.population.next_id()
@@ -47,16 +48,18 @@ class Genome:
     def save(self, parameters=True):
         saved = [(self.optimizer.__class__, self.optimizer.save()),
                  [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
-                 [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes], self.score]
+                 [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes],
+                 self.score, self.loss, self.trained, self.no_change]
         if parameters:
             saved += [self.net_parameters]
         return saved
 
     def load(self, save):
         if len(save) == 5:
-            saved_optimizer, saved_nodes, saved_genes, self.score, self.net_parameters = save
+            [saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change,
+             self.net_parameters] = save
         else:
-            saved_optimizer, saved_nodes, saved_genes, self.score = save
+            saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change = save
             self.net_parameters = None
         self.optimizer = saved_optimizer[0]().load(saved_optimizer[1])
         self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
@@ -267,10 +270,10 @@ class Genome:
                       nodes_and_genes=[[node.copy() for node in self.nodes],
                                        [gene.copy() for gene in self.genes]])
 
-    def dissimilarity(self, other, c=[5, 5, 5, 2, 5]):
+    def dissimilarity(self, other, c=[5, 5, 5, 2, 5, 1]):
         """
         The distance/dissimilarity of two genomes, similar to NEAT
-        dist = (c1*S + c2*D + c3*E)/N + c4*T + c5*K
+        dist = (c0*S + c1*D + c2*E)/N + c3*T + c4*K + c5*X
         where
         S sum of difference in same genes
         D number of disjoint genes
@@ -278,13 +281,14 @@ class Genome:
         N length of larger gene
         T difference in optimizer + hyperparameters
         K mean of difference in same nodes
+        X difference in trained epochs
         """
         genes_1, genes_2 = map(lambda x: x.genes_by_id, [self, other])
         ids_1, ids_2 = map(lambda x: set(x.keys()), [genes_1, genes_2])
         nodes_1, nodes_2 = map(lambda x: x.nodes_by_id, [self, other])
         node_ids = set(nodes_1.keys()) & set(nodes_2.keys())
 
-        N = max(len(ids_1), len(ids_2))
+        N = 1 # TODO: max(len(ids_1), len(ids_2))
         excess_start = max(ids_1 | ids_2) + 1
 
         S = sum([genes_1[_id].dissimilarity(genes_2[_id]) for _id in ids_1 & ids_2])
@@ -292,5 +296,6 @@ class Genome:
         E = len(ids_1 ^ ids_2) - D
         T = self.optimizer.dissimilarity(other.optimizer)
         K = sum([nodes_1[_id].dissimilarity(nodes_2[_id]) for _id in node_ids]) / len(node_ids)
+        X = limited_growth(np.abs(self.trained - other.trained), 1, 10)
 
-        return (c[0] * S + c[1] * D + c[2] * E) / N + c[3] * T + c[4] * K
+        return (c[0] * S + c[1] * D + c[2] * E) / N + c[3] * T + c[4] * K + c[5] * X

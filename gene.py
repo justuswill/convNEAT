@@ -23,6 +23,7 @@ class Gene:
 
         # Weights & bias - To be set after first training.
         self.net_parameters = dict()
+        # TODO COPY THIS + ENABLED
 
     def __repr__(self):
         r = super().__repr__()
@@ -105,10 +106,10 @@ class KernelGene(Gene):
         return 0
 
     def init_depth_size_change(self):
-        return 0
+        return weighted_choice([0, 1, 2, 5], [0.4, 0.3, 0.2, 0.1])
 
     def init_depth_mult(self):
-        return 1
+        return weighted_choice([1, 2, 3], [0.7, 0.2, 0.1])
 
     def init_mutate_to(self):
         return [[KernelGene, PoolGene, DenseGene], [1, 2, 0]]
@@ -148,7 +149,7 @@ class KernelGene(Gene):
         mutations = random_choices((self.mutate_width, self.mutate_height, self.mutate_size,
                                     self.mutate_stride, self.mutate_padding,
                                     self.mutate_depth_size_change, self.mutate_depth_mult),
-                                   (0.1, 0.1, 0.2, 0.3, 0.2, 0.2, 0.1))
+                                   (0.1, 0.1, 0.2, 0.3, 0.2, 0.3, 0.1))
         for mutate in mutations:
             mutate()
         return self

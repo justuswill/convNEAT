@@ -39,13 +39,23 @@ def build_net_from_genome(genome, input_size, output_size):
     return net, optimizer, criterion
 
 
-def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_loader_train):
+def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_loader_train,
+                  n_epochs_no_change=3, tol=1e-5):
+    """
+    Train net
+    Stop when in <n_epochs_no_change> no improvment by at least <tol> is made
+    Stop when nan occurs for 5 consecutive sections (1/10 of epoch)
+
+    Updates values in genomes that are relevant for this
+    """
     net = net.to(torch_device)
 
     print('Beginning training')
+    nan_sections = 0
     for epoch in range(epochs):
         epoch_loss = 0.
         batch_loss = 0.
+        # 10 Sections
         n = len(data_loader_train) // 10
         for i, (inputs, labels) in enumerate(data_loader_train):
             optimizer.zero_grad()
@@ -58,9 +68,26 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
             if (i + 1) % n == 0:
                 print('[{}, {:3}] loss: {:.3f}'.format(
                     epoch, i + 1, batch_loss / n))
+                if batch_loss / n == float('nan'):
+                    nan_sections += 1
+                    if nan_sections == 5:
+                        # Quit without saving net parameters
+                        return
+                else:
+                    nan_sections = 0
                 batch_loss = 0.
-        print('[{}] loss: {:.3f}'.format(
-            epoch, epoch_loss / len(data_loader_train)))
+        epoch_loss_mean = epoch_loss / len(data_loader_train)
+        print('[%d] loss: %.3f' % (epoch, epoch_loss_mean))
+        genome.trained += 1
+        if epoch_loss_mean < genome.loss - tol:
+            genome.loss = epoch_loss_mean
+            genome.no_change = 0
+        else:
+            genome.no_change += 1
+            if genome.no_change >= n_epochs_no_change:
+                # Get one epoch to improve next generation
+                genome.no_change -= 1
+                break
     print('Finished training')
 
     # Save weights and bias

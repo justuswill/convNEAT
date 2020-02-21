@@ -96,19 +96,18 @@ class Population:
             self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
-    def cluster(self, threshold=1500, rel_threshold=[1.2, 0.5]):
+    def cluster(self, threshold=120, rel_threshold=[1.2, 0.75]):
         """
         Cluster the genomes with K_Medoids-Clustering
         Change the number of species if needed (-2 .. +2)
 
         The number of clusters is less than the minimum needed to achieve a score below <threshold>.
-        i.e. the clustering always scores above <threshold>
-        This is to avoid small clusters, 1500 is good value for 50-100 genomes
+        i.e. the clustering always scores above <threshold> * n - with n = size of population
+        This is to avoid small clusters, 1500 is good value for 50-100 genomes # TODO is it?
 
         Additionally,
-        the number of cluster decreases if the score of k-1 is higher by <20%
-        the number of cluster increases if the score of k+1 is smaller by >50%
-        These numbers can be set.
+        the number of cluster decreases if the score of k-1 is < <rel_threshold[0]> % of k score
+        the number of cluster increases if the score of k+1 is < <rel_threshold[1]> % of k score
         """
         k = self.number_of_species
         n = self.n
@@ -128,7 +127,7 @@ class Population:
         cumlen = np.cumsum([0] + species_len)
         cur_centers = []
         labels = np.array([i for i in sorted_species_ids for _ in self.species[i]])
-        for i in range(k):
+        for i in sorted_species_ids:
             in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
             cur_centers += [np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]]
 
@@ -144,11 +143,11 @@ class Population:
                      ", ".join(["%s: %s" % (sp, sc) for sp, sc in zip(ids_to_check, list(scores.values()))]))
 
         # Change number of clusters
-        while k + 1 in ids_to_check and threshold <= scores[k + 1] < rel_threshold[1] * scores[k]:
+        while k + 1 in ids_to_check and threshold * self.n <= scores[k + 1] < rel_threshold[1] * scores[k]:
             print("number of clusters increased by one")
             k += 1
             sorted_species_ids += [next(self.species_id_generator)]
-        while k - 1 in ids_to_check and scores[k - 1] < min(rel_threshold[0] * scores[k], threshold):
+        while k - 1 in ids_to_check and (scores[k] < threshold * self.n or scores[k - 1] < rel_threshold[0] * scores[k]):
             print("number of clusters increased by one")
             k -= 1
 
@@ -199,8 +198,15 @@ class Population:
         lens = [[len_ for len_, _ in hist.values()] for hist in self.history]
         cumlens = [np.cumsum([0] + l) for l in lens]
         sp_ids = [hist.keys() for hist in self.history]
-        pos = [{0: self.n}] + [{sp: pos for sp, pos in zip(sp_id, cumlen)} for sp_id, cumlen in zip(sp_ids, cumlens)]
+        pos = [{sp: pos for sp, pos in zip(sp_id, cumlen)} for sp_id, cumlen in zip(sp_ids, cumlens)]
+        # Special start
+        pos = [{0: 0}] + pos
         sp_ids = [pos[0].keys()] + sp_ids
+        cumlens = [[0]] + cumlens
+
+        logging.info(sp_ids)
+        logging.info(pos)
+        logging.info(cumlens)
 
         # For every generation
         for i in range(len(pos) - 1):
@@ -214,15 +220,18 @@ class Population:
             dead_sp = [[pos[i][sp], pos[i + 1][max([p for p in sp_ids[i + 1] if p < sp])]
             if min(sp_ids[i + 1]) < sp else self.n]
                        for sp in sp_ids[i] - sp_ids[i + 1]]
-            lines = [[self.n, self.n]] + connections + new_sp + dead_sp
+            # Line on top
+            cieling = [[self.n, self.n]] if i > 0 else [[0, self.n]]
+            lines = cieling + connections + new_sp + dead_sp
             # Plot scores
             patches = []
             for sp in sp_ids[i + 1]:
                 base = [sp if sp in sp_ids[i] else max([p for p in sp_ids[i] if p < sp])
-                        if min(sp_ids[i]) < sp else self.n, sp]
+                        if min(sp_ids[i]) < sp else self.n if i > 0 else 0, sp]
                 bel = [pos[i][base[0]], pos[i + 1][base[1]]]
                 abv = list(map(lambda x: pos[x][max([p for p in sp_ids[x] if p < sp])]
-                               if min(sp_ids[x]) < sp else self.n, [i, i + 1]))
+                               if min(sp_ids[x]) < sp else self.n if x > 0 else 0, [i, i + 1]))
+                logging.info("poly at %s %s - %d %d" % (bel, abv, sp, i))
                 polygon = Polygon([[i, bel[0]], [i, abv[0]], [i + 1, abv[1]], [i + 1, bel[1]]], True)
                 patches.append(polygon)
                 # If no score yet, fill later
@@ -233,8 +242,10 @@ class Population:
                 p = PatchCollection(patches, cmap='viridis', alpha=0.4)
                 colors = scores[i] ** 3
                 p.set_array(np.array(colors))
+                p.set_clim([0, 1])
                 self.monitor.plot(2, p, kind='add_collection')
             self.monitor.plot(2, [i, i + 1], [[l for l, _ in lines], [l for _, l in lines]], c='darkblue')
+            self.monitor.plot(2, list(range(self.generation + 1)), kind="set_xticks")
         self.monitor.send()
 
     def new_species_sizes(self, score_by_species):
@@ -305,6 +316,7 @@ class Population:
                 p = PatchCollection([self.polygons[sp]], cmap='viridis', alpha=0.4)
                 colors = [score_by_species[sp]**3]
                 p.set_array(np.array(colors))
+                p.set_clim([0, 1])
                 self.monitor.plot(2, p, kind='add_collection')
         return [evaluated_genomes_by_species, score_by_species]
 

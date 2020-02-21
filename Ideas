@@ -1,15 +1,13 @@
 Enhancements:
-- Nutzung von Early-Stopping-Verfahren
 - Trainingsfortschritt dort wo möglich zwischen Generationen erhalten (Muss noch getestet werden für die einzelnen Gene)
   Alles Zwischenspeichern zu viel Platz (nur Elite genomes)
-- Trainingsfortschritt in Ähnlichkeitsfunktion einbauen
 
 Ideas:
-- fill polygons one by one
+- min/max number of species
 - species death + adoption
 - manually delete to small species after clustering
 - restructure genomes for distance plot
-- better cluster trehhold
+- better cluster threshold
 - inter-gene crossover
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty
@@ -21,8 +19,6 @@ Ideas:
     Same for the selection of what genes to mutate
 - stride dial for Pooling
 (-) better structure seperate algorithm / initialization/ data
-- plotting pipeline
-- init for clustering, use old centers as start for Kmedoids
 
 Todo:
 - Viele Testläufe um gute Werte zu finden für:
