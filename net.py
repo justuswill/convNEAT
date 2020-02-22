@@ -68,7 +68,7 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
             if (i + 1) % n == 0:
                 print('[{}, {:3}] loss: {:.3f}'.format(
                     epoch, i + 1, batch_loss / n))
-                if batch_loss / n == float('nan'):
+                if np.isnan(batch_loss / n):
                     nan_sections += 1
                     if nan_sections == 5:
                         # Quit without saving net parameters

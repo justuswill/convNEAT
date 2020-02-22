@@ -123,12 +123,12 @@ class Population:
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
         # Get centers of old species
-        species_len = [len(self.species[i]) for i in sorted_species_ids]
+        species_len = [len(self.species[sp]) for sp in sorted_species_ids]
         cumlen = np.cumsum([0] + species_len)
         cur_centers = []
-        labels = np.array([i for i in sorted_species_ids for _ in self.species[i]])
-        for i in sorted_species_ids:
-            in_cluster_distances = distances[np.ix_(labels == i, labels == i)]
+        labels = np.array([sp for sp in sorted_species_ids for _ in self.species[sp]])
+        for i, sp in enumerate(sorted_species_ids):
+            in_cluster_distances = distances[np.ix_(labels == sp, labels == sp)]
             cur_centers += [np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]]
 
         # Get performance of K-Medoids for some # of clusters near k
@@ -236,6 +236,7 @@ class Population:
                 patches.append(polygon)
                 # If no score yet, fill later
                 if i == len(scores):
+                    logging.info("poly %s at %d" % (polygon,sp))
                     self.polygons.update({sp: polygon})
             # If score, plot now
             if i < len(scores):
