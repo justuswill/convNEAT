@@ -112,24 +112,27 @@ class Population:
         k = self.number_of_species
         n = self.n
 
-        # Sorted after species size # TODO Plot id match
-        sorted_species_ids = sorted(self.species.keys(), key=lambda i: len(self.species.get(i)))
-        all_genomes = [g for i in sorted_species_ids for g in self.species[i]]
+        # Sorted by size
+        species_ids = list(self.species.keys())
+        sorted_species_ids = sorted(species_ids, key=lambda i: len(self.species[i]))
+        # Combine all species
+        all_genomes = [g for i in species_ids for g in self.species[i]]
 
-        # Distance matrix
+        # Distance matrix, species sorted by id
         distances = np.zeros((n, n))
         for i in range(n):
             for j in range(n):
                 distances[i, j] = all_genomes[i].dissimilarity(all_genomes[j])
 
-        # Get centers of old species
-        species_len = [len(self.species[sp]) for sp in sorted_species_ids]
+        # Get centers of old species, species sorted by size
+        species_len = [len(self.species[sp]) for sp in species_ids]
         cumlen = np.cumsum([0] + species_len)
-        cur_centers = []
-        labels = np.array([sp for sp in sorted_species_ids for _ in self.species[sp]])
+        cur_centers_by_species = dict()
+        labels = np.array([sp for sp in self.species.keys() for _ in self.species[sp]])
         for i, sp in enumerate(sorted_species_ids):
             in_cluster_distances = distances[np.ix_(labels == sp, labels == sp)]
-            cur_centers += [np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]]
+            cur_centers_by_species[sp] = np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]
+        cur_centers = [cur_centers_by_species[i] for i in sorted_species_ids]
 
         # Get performance of K-Medoids for some # of clusters near k
         ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
@@ -146,7 +149,9 @@ class Population:
         while k + 1 in ids_to_check and threshold * self.n <= scores[k + 1] < rel_threshold[1] * scores[k]:
             print("number of clusters increased by one")
             k += 1
-            sorted_species_ids += [next(self.species_id_generator)]
+            new_species = next(self.species_id_generator)
+            sorted_species_ids += [new_species]
+            species_ids += [new_species]
         while k - 1 in ids_to_check and (scores[k] < threshold * self.n or scores[k - 1] < rel_threshold[0] * scores[k]):
             print("number of clusters increased by one")
             k -= 1
@@ -157,7 +162,7 @@ class Population:
         labels = [sorted_species_ids[i] for i in all_labels[k]]
 
         # Rebuild species
-        self.species = {i: [] for i in sorted_species_ids if i in labels}
+        self.species = {i: [] for i in species_ids if i in labels}
         for i, g in enumerate(all_genomes):
             self.species[labels[i]] += [g]
 
@@ -204,10 +209,6 @@ class Population:
         sp_ids = [pos[0].keys()] + sp_ids
         cumlens = [[0]] + cumlens
 
-        logging.info(sp_ids)
-        logging.info(pos)
-        logging.info(cumlens)
-
         # For every generation
         for i in range(len(pos) - 1):
             # survived species
@@ -231,7 +232,6 @@ class Population:
                 bel = [pos[i][base[0]], pos[i + 1][base[1]]]
                 abv = list(map(lambda x: pos[x][max([p for p in sp_ids[x] if p < sp])]
                                if min(sp_ids[x]) < sp else self.n if x > 0 else 0, [i, i + 1]))
-                logging.info("poly at %s %s - %d %d" % (bel, abv, sp, i))
                 polygon = Polygon([[i, bel[0]], [i, abv[0]], [i + 1, abv[1]], [i + 1, bel[1]]], True)
                 patches.append(polygon)
                 # If no score yet, fill later

@@ -213,6 +213,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
 
     def _init_centers(self, D, n_clusters, old_centers):
         """
+        Assumes old_centers are sorted by species size
         Use old centers as a starting point.
         If less than n_clusters are given
         add centers with biggest squared distance to other clusters centers.

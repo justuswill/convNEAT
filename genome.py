@@ -21,11 +21,12 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, optimizer=None, nodes_and_genes=None):
+    def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=None):
         self.population = population
         self.optimizer = optimizer or self.init_optimizer()
 
-        self.nodes, self.genes = nodes_and_genes or self.init_genome()
+        self.nodes, self.genes = nodes_and_genes or self.init_genome()\
+            if nodes is None or genes is None else [nodes, genes]
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
         # These are set after training. For checkpointing and to be used by elite genomes
@@ -34,7 +35,7 @@ class Genome:
 
         # Early stopping etc.
         self.loss = float('inf')
-        self.trained = 0
+        self.trained = trained or 0
         self.no_change = 0
 
     def __repr__(self):
@@ -55,7 +56,7 @@ class Genome:
         return saved
 
     def load(self, save):
-        if len(save) == 5:
+        if len(save) == 8:
             [saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change,
              self.net_parameters] = save
         else:

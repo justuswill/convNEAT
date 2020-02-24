@@ -13,7 +13,7 @@ from selection import cut_off_selection, tournament_selection, fitness_proportio
 from crossover import crossover
 from net import train_on_data, evaluate
 from monitor import Monitor
-from exploration import show_genomes
+from exploration import show_genomes, from_human_readable
 
 
 def data_loader(torch_device):
@@ -63,13 +63,17 @@ def main():
     while True:
         loading = input("load from checkpoint? [y/n]")
         if loading == 'e':
-            show_genomes(evaluate=functools.partial(
-                             evaluate,
-                             torch_device=torch_device,
-                             data_loader_test=data_loader_val,
-                             output_size=output_size
-                         ))
-            break
+            show_genomes(input_size=input_size)
+            return
+        if loading == 'f':
+            from_human_readable(input_size=input_size, output_size=output_size,
+                                evaluate=functools.partial(
+                                    evaluate,
+                                    torch_device=torch_device,
+                                    data_loader_test=data_loader_val,
+                                    output_size=output_size
+                                ))
+            return
         elif loading == 'n':
             load = None
             break

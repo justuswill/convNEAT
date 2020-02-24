@@ -13,11 +13,11 @@ class Gene:
     (or to what it will be changed if its a initializing edge)
     """
 
-    def __init__(self, id, id_in, id_out, mutate_to=None):
+    def __init__(self, id, id_in, id_out, mutate_to=None, enabled=True):
         self.id = id
         self.id_in = id_in
         self.id_out = id_out
-        self.enabled = True
+        self.enabled = enabled
 
         self.mutate_to = mutate_to or self.init_mutate_to()
 
@@ -63,13 +63,15 @@ class Gene:
 class KernelGene(Gene):
     """
     Kernels are the edges of the graph
+    Width, Height are arg for read_human_readable only
     """
 
     def __init__(self, id, id_in, id_out, size=[None, None], stride=None, padding=None,
-                 depth_size_change=None, depth_mult=None):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to())
+                 depth_size_change=None, depth_mult=None, enabled=True, width=None, height=None):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
 
-        width, height = size
+        if size is not None:
+            width, height = size
         self.width = width or self.init_width()
         self.height = height or self.init_height()
         self.stride = stride or self.init_stride()
@@ -200,14 +202,17 @@ class KernelGene(Gene):
 class PoolGene(Gene):
     """
     Pooling Layers are edges of the graph
+    Width, Height are arg for read_human_readable only
     """
-    def __init__(self, id, id_in, id_out, pooling=None, size=[None, None], stride=None, padding=None):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to())
+    def __init__(self, id, id_in, id_out, pooling=None, size=[None, None], stride=None, padding=None, enabled=True,
+                 width=None, height=None):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
 
         self.possible_pooling = ['max', 'avg']
 
+        if size is not None:
+            width, height = size
         self.pooling = pooling or self.init_pooling()
-        [width, height] = size
         self.width = width or self.init_width()
         self.height = height or self.init_height()
         self.stride = stride or self.init_stride()
@@ -328,8 +333,8 @@ class DenseGene(Gene):
     so the number of hidden neurons per layer it determined by the distance to the layer before
     """
 
-    def __init__(self, id, id_in, id_out, size_change=None, activation=None):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to())
+    def __init__(self, id, id_in, id_out, size_change=None, activation=None, enabled=True):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
 
         self.possible_activations = ['relu', 'tanh']
 
