@@ -2,7 +2,7 @@ import functools
 import random
 import numpy as np
 import logging
-import matplotlib.pyplot as plt
+import os
 
 import torch
 import torchvision
@@ -13,6 +13,7 @@ from selection import cut_off_selection, tournament_selection, fitness_proportio
 from crossover import crossover
 from net import train_on_data, evaluate
 from monitor import Monitor
+from exploration import show_genomes
 
 
 def data_loader(torch_device):
@@ -50,7 +51,7 @@ def data_loader(torch_device):
 
 def main():
     # manually seed all random number generators for reproducible results
-    seed = 5
+    seed = 0
     random.seed(seed)
     np.random.seed(seed)
     torch.random.manual_seed(seed)
@@ -62,20 +63,28 @@ def main():
     while True:
         loading = input("load from checkpoint? [y/n]")
         if loading == 'e':
-            explore_checkpoints()
+            show_genomes(evaluate=functools.partial(
+                             evaluate,
+                             torch_device=torch_device,
+                             data_loader_test=data_loader_val,
+                             output_size=output_size
+                         ))
             break
-        if loading == 'n':
+        elif loading == 'n':
             load = None
             break
         elif loading == 'y':
             checkpoint = input("checkpoint name:")
             generation = int(input("generation:"))
+            if not os.path.exists(os.path.join("checkpoints", checkpoint)):
+                print("This checkpoint doesn't exist")
+                continue
             load = [checkpoint, generation]
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=100, name='demo2', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
-                   input_size=input_size, output_size=output_size, epochs=5,
+    p = Population(n=50, name='demo', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
+                   input_size=input_size, output_size=output_size, epochs=0,
                    train=functools.partial(
                        train_on_data,
                        torch_device=torch_device,
@@ -95,24 +104,6 @@ def main():
                    load=load)
     for _ in range(50):
         p.evolve()
-
-
-def explore_checkpoints():
-    checkpoint = input("checkpoint name:")
-    generation = int(input("Last generation:"))
-
-    torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_loader_test, data_loader_train, data_loader_val, input_size, output_size = data_loader(torch_device)
-
-    fig, ax = plt.subplots()
-    for i in range(1, generation+1):
-        p = Population(1, 1, 1, 1, load=(checkpoint, i))
-        print(p.best_genome)
-        print(p.best_genome.net_parameters)
-        ax.clear()
-        p.best_genome.visualize(ax=ax, input_size=(1, 28, 28))
-        evaluate(p.best_genome, torch_device=torch_device, data_loader_test=data_loader_test, output_size=output_size)
-        plt.pause(1)
 
 
 if __name__ == '__main__':

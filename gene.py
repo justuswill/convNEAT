@@ -168,7 +168,7 @@ class KernelGene(Gene):
             logging.debug('Mutated width on gene %d' % self.id)
 
         # force out_height > 0
-        if not in_height - (self.height - 1) + 2 * self.height > 0:
+        if not in_height - (self.height - 1) + 2 * self.padding > 0:
             self.height = 2 * self.padding + in_height
             logging.debug('Mutated height on gene %d' % self.id)
 
@@ -292,7 +292,7 @@ class PoolGene(Gene):
             logging.debug('Mutated width on gene %d' % self.id)
 
         # force out_height > 0
-        if not in_height - (self.height - 1) + 2 * self.height > 0:
+        if not in_height - (self.height - 1) + 2 * self.padding > 0:
             self.height = 2 * self.padding + in_height
             logging.debug('Mutated height on gene %d' % self.id)
 

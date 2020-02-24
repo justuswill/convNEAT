@@ -112,7 +112,7 @@ class Population:
         k = self.number_of_species
         n = self.n
 
-        # Sorted after species size
+        # Sorted after species size # TODO Plot id match
         sorted_species_ids = sorted(self.species.keys(), key=lambda i: len(self.species.get(i)))
         all_genomes = [g for i in sorted_species_ids for g in self.species[i]]
 
@@ -236,7 +236,6 @@ class Population:
                 patches.append(polygon)
                 # If no score yet, fill later
                 if i == len(scores):
-                    logging.info("poly %s at %d" % (polygon,sp))
                     self.polygons.update({sp: polygon})
             # If score, plot now
             if i < len(scores):
@@ -278,7 +277,7 @@ class Population:
         counter = itertools.count(1)
         evaluated_genomes_by_species = dict()
         score_by_species = dict()
-        for sp, genomes in self.species.items():
+        for sp, genomes in sorted(self.species.items()):
             evaluated_genomes = []
             for g in genomes:
                 i = next(counter)
@@ -306,11 +305,14 @@ class Population:
                                           input_size=(1, 28, 28), score=score, clear=True, show=True)
 
                 evaluated_genomes += [(g, score)]
-
             evaluated_genomes_by_species[sp] = sorted(evaluated_genomes, key=lambda x: x[1], reverse=True)
-            sp_scores = [s for g, s in evaluated_genomes]
+
             # Score of species is the mean of their genomes' scores
+            sp_scores = [s for g, s in evaluated_genomes]
             score_by_species[sp] = sum(sp_scores) / len(sp_scores)
+
+            # Update History
+            self.history[-1][sp] = [self.history[-1][sp][0], score_by_species[sp]]
 
             # Fill species plot
             if self.monitor is not None:
@@ -344,17 +346,14 @@ class Population:
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
-            print('Species %d with %d members:\n' % (species, len(evaluated_genomes)))
+            print('Species %d with %d members - mean acc %.2f:\n' %
+                  (species, len(evaluated_genomes), score_by_species[species]))
             for g, s in evaluated_genomes:
                 r = repr(g)
                 if len(r) > 64:
                     r = r[:60] + '...' + r[-1:]
-                print('{:64}:'.format(r), s)
+                print('%64s: %.4f' % (r, s))
             print()
-
-        # Update History
-        for sp, sc in score_by_species.items():
-            self.history[-1][sp] = [self.history[-1][sp][0], score_by_species[sp]]
 
         # Resize species, increase better scoring species
         new_sizes = self.new_species_sizes(score_by_species)
