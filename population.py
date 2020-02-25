@@ -136,7 +136,8 @@ class Population:
 
         # Get performance of K-Medoids for some # of clusters near k
         ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
-        medoids = {i: KMedoids(n_clusters=i, metric='precomputed').fit(distances, old_centers=cur_centers)
+        medoids = {i: KMedoids(n_clusters=i, metric='precomputed', min_cluster_size=self.min_species_size).
+                      fit(distances, old_centers=cur_centers)
                    for i in ids_to_check}
         all_labels = {i: medoid.labels_ for i, medoid in medoids.items()}
         scores = {i: medoid.score_ for i, medoid in medoids.items()}
