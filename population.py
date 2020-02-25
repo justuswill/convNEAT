@@ -26,12 +26,14 @@ class Population:
     epochs           - the standard (minimum) number of epochs to train before evaluation
     min_species_size - the lower limit to species sizes (cur. only used for spawn calculations)
     elitism_rate     - the % of best genomes to transfer ot the new generation
+    n_generations_no_change, tol         - how many generations a species is allowed to not improve by at least tol
     load = [checkpoint_name, generation] - whether to load from a checkpoint
     monitor          - if the results should be shown graphically
     """
 
     def __init__(self, n, evaluate, parent_selection, crossover, train, input_size, output_size,
-                 name=None, elitism_rate=0.1, min_species_size=5, epochs=2, load=None, monitor=None):
+                 name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
+                 epochs=2, load=None, monitor=None):
         # Evolution parameters
         self.evaluate = evaluate
         self.parent_selection = parent_selection
@@ -40,11 +42,16 @@ class Population:
         self.epochs = epochs
         self.min_species_size = min_species_size
         self.elitism_rate = elitism_rate
+        self.n_generations_no_change = n_generations_no_change
+        self.tol = tol
 
         # Plotting and tracking training progress
         self.monitor = monitor
         # On the go plotting of species score
         self.polygons = dict()
+
+        # Calculated after first clustering
+        self.species_repr = None
 
         # Load instead
         if load is not None:
@@ -161,6 +168,8 @@ class Population:
         self.number_of_species = k
         # Use old identifiers for clusters
         labels = [sorted_species_ids[i] for i in all_labels[k]]
+        self.species_repr = {sp: all_genomes[center]
+                             for sp, center in zip(sorted_species_ids, medoids[k].medoid_indices_)}
 
         # Rebuild species
         self.species = {i: [] for i in species_ids if i in labels}
@@ -249,9 +258,33 @@ class Population:
             self.monitor.plot(2, list(range(self.generation + 1)), kind="set_xticks")
         self.monitor.send()
 
+    def species_death(self, evaluated_genomes_by_species):
+        """
+        Check for species that haven't improved in <n_generations_no_change> and kill them.
+        Elites are adopted by other species.
+        The remaining space is filled by other species
+        """
+        if self.generation > self.n_generations_no_change:
+            species_ids = list(evaluated_genomes_by_species.keys())
+            past = [(sp, [self.history[sp][i]
+                          for i in range(self.generation - self.n_generations_no_change, self.generation + 1)])
+                    for sp in species_ids]
+            for sp, past_scores in past:
+                if max(past_scores) < past_scores[0] + self.tol:
+                    # Get elites
+                    elitism = math.ceil(self.elitism_rate * len(evaluated_genomes_by_species[sp]))
+                    elite_genomes = [(g, s) for g, s in evaluated_genomes_by_species[sp][:elitism]]
+
+                    # Decide who adopts them
+                    while len(elite_genomes) > 0:
+                        g, s = elite_genomes.pop(0)
+                        new_sp = min(species_ids, key=lambda sp: g.dissimilarity(self.species_repr[sp]))
+                        evaluated_genomes_by_species[new_sp] += [(g, s)]
+                    del evaluated_genomes_by_species[sp]
+
     def new_species_sizes(self, score_by_species):
         """
-        Calculate new the new sizes for every species (proportionate to fitness)
+        Calculate the new sizes for every species (proportionate to fitness)
         """
         scores = np.array(list(score_by_species.values()))
         sizes = np.maximum(scores/sum(scores) * self.n, self.min_species_size)
@@ -356,7 +389,8 @@ class Population:
                 print('%64s: %.4f' % (r, s))
             print()
 
-        # Resize species, increase better scoring species
+        # Resize species, increase better scoring species and kill bad performing ones
+        self.species_death(evaluated_genomes_by_species)
         new_sizes = self.new_species_sizes(score_by_species)
 
         print("Breading new neural networks")

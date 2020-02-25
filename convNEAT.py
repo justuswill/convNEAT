@@ -87,7 +87,7 @@ def main():
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=50, name='demo', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
+    p = Population(n=20, name='demo', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
                    input_size=input_size, output_size=output_size, epochs=0,
                    train=functools.partial(
                        train_on_data,
