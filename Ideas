@@ -1,11 +1,7 @@
-Enhancements:
-- Trainingsfortschritt dort wo möglich zwischen Generationen erhalten (Muss noch getestet werden für die einzelnen Gene)
-  Alles Zwischenspeichern zu viel Platz (nur Elite genomes)
-
 Ideas:
+- Test save genes params
 - min/max number of species
-- species death + adoption
-- manually delete to small species after clustering
+- cluster center in exploration
 - restructure genomes for distance plot
 - better cluster threshold
 - inter-gene crossover

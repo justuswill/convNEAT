@@ -87,8 +87,8 @@ def main():
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=100, name='demo', elitism_rate=0.25, min_species_size=5, monitor=Monitor(),
-                   input_size=input_size, output_size=output_size, epochs=5,
+    p = Population(n=50, name='cluster_demo', elitism_rate=0.25, min_species_size=5, epochs=0, save_mode="elites",
+                   input_size=input_size, output_size=output_size, n_generations_no_change=3, tol=0, monitor=Monitor(),
                    train=functools.partial(
                        train_on_data,
                        torch_device=torch_device,
@@ -104,7 +104,6 @@ def main():
                        stochastic_universal_sampling,
                        selection_percentage=0.3
                    ),
-                   crossover=crossover,
                    load=load)
     for _ in range(50):
         p.evolve()

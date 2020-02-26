@@ -40,10 +40,10 @@ def build_net_from_genome(genome, input_size, output_size):
 
 
 def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_loader_train,
-                  n_epochs_no_change=3, tol=1e-5):
+                  n_epochs_no_change=3, tol=1e-5, save_net_param=True, save_gene_param=True):
     """
     Train net
-    Stop when in <n_epochs_no_change> no improvment by at least <tol> is made
+    Stop when in <n_epochs_no_change> no improvement by at least <tol> is made
     Stop when nan occurs for 5 consecutive sections (1/10 of epoch)
 
     Updates values in genomes that are relevant for this
@@ -91,12 +91,14 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
     print('Finished training')
 
     # Save weights and bias
-    for name, parameter in net.state_dict().items():
-        if name.startswith('conv') or name.startswith('pool_'):
-            _id = int(name.split('.')[0].split('_')[-1])
-            genome.genes_by_id[_id].net_parameters[name] = parameter.to('cpu')
+    if save_gene_param:
+        for name, parameter in net.state_dict().items():
+            if name.startswith('conv') or name.startswith('pool_'):
+                _id = int(name.split('.')[0].split('_')[-1])
+                genome.genes_by_id[_id].net_parameters[name] = parameter.to('cpu')
     # Save net
-    genome.net_parameters = net.state_dict()
+    if save_net_param:
+        genome.net_parameters = net.state_dict()
 
 
 def evaluate(net, torch_device, data_loader_test, output_size):

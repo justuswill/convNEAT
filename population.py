@@ -12,6 +12,7 @@ from matplotlib.collections import PatchCollection
 from KMedoids import KMedoids
 from genome import Genome
 from net import build_net_from_genome
+from crossover import crossover
 
 
 class Population:
@@ -28,16 +29,21 @@ class Population:
     elitism_rate     - the % of best genomes to transfer ot the new generation
     n_generations_no_change, tol         - how many generations a species is allowed to not improve by at least tol
     load = [checkpoint_name, generation] - whether to load from a checkpoint
+    save_mdoe        - all:     save all genome and gene parameters
+                       elites:  save all elite  and gene parameters
+                       genomes: save all genome          parameters
+                       bare:    save all elite           parameters
+                       None:    don't save               parameters
     monitor          - if the results should be shown graphically
     """
 
-    def __init__(self, n, evaluate, parent_selection, crossover, train, input_size, output_size,
+    def __init__(self, n, input_size, output_size, evaluate, parent_selection, train, cross_over=crossover,
                  name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
-                 epochs=2, load=None, monitor=None):
+                 epochs=2, load=None, save_mode="elites", monitor=None):
         # Evolution parameters
         self.evaluate = evaluate
         self.parent_selection = parent_selection
-        self.crossover = crossover
+        self.crossover = cross_over
         self.train = train
         self.epochs = epochs
         self.min_species_size = min_species_size
@@ -50,10 +56,13 @@ class Population:
         # On the go plotting of species score
         self.polygons = dict()
 
-        # Calculated after first clustering
+        # Species centers calculated after first clustering
         self.species_repr = None
 
-        # Load instead
+        # What to save: save_genomes =1 saves elites =2 saves all genomes
+        self.save_genomes, self.save_genes = {"all": [2, True], "elites": [1, True], "genomes": [2, False],
+                                              "bare": [1, False], "None": [0, False]}[save_mode]
+        # Load if a checkpoint is given
         if load is not None:
             self.load_checkpoint(*load)
         else:
@@ -266,9 +275,10 @@ class Population:
         """
         if self.generation > self.n_generations_no_change:
             species_ids = list(evaluated_genomes_by_species.keys())
-            past = [(sp, [self.history[sp][i]
-                          for i in range(self.generation - self.n_generations_no_change, self.generation + 1)])
-                    for sp in species_ids]
+            start = self.generation - self.n_generations_no_change - 1
+            past = [(sp, [self.history[i][sp][1]
+                          for i in range(start, self.generation)])
+                    for sp in species_ids if sp in self.history[start].keys()]
             for sp, past_scores in past:
                 if max(past_scores) < past_scores[0] + self.tol:
                     # Get elites
@@ -325,12 +335,13 @@ class Population:
                                       n=self.n, i=i, input_size=self.input_size, clear=True, show=True)
 
                 logging.debug('Building Net')
-                net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
                 try:
-                    self.train(g, net, optim, criterion, epochs=self.epochs)
+                    net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
+                    self.train(g, net, optim, criterion, epochs=self.epochs,
+                               save_net_param=self.save_genomes >= 1, save_gene_param=self.save_genes)
                     score = self.evaluate(net)
                 except RuntimeError as e:
-                    logging.warning("Net failed to train:\n%s" % e)
+                    logging.info("Net failed to train:\n%s" % e)
                     score = 0
                 g.score = score
 
@@ -398,9 +409,10 @@ class Population:
         new_sizes = self.new_species_sizes(score_by_species)
 
         print("Breading new neural networks")
-        # Same mutation (split_edge) in a gen get the same innovation number
+        # Same mutations (split_edge) in a gen get the same innovation number
         this_gen_mutations = dict()
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
+            # Save elites
             old_n_sp = len(evaluated_genomes)
             new_n_sp = new_sizes[sp]
             elitism = min(math.ceil(self.elitism_rate * old_n_sp), new_n_sp)
@@ -409,6 +421,13 @@ class Population:
             for g in elite_genomes:
                 print(g)
             print()
+
+            # Delete net parameters of non-elites
+            if self.save_genes < 2:
+                for g, _ in evaluated_genomes[elitism:]:
+                    g.net_parameters = None
+
+            # Selection & Crossover & Mutation
             parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
             new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
