@@ -292,8 +292,12 @@ class Population:
 
                 logging.debug('Building Net')
                 net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
-                self.train(g, net, optim, criterion, epochs=self.epochs)
-                score = self.evaluate(net)
+                try:
+                    self.train(g, net, optim, criterion, epochs=self.epochs)
+                    score = self.evaluate(net)
+                except RuntimeError as e:
+                    logging.warning("Net failed to train:\n%s" % e)
+                    score = 0
                 g.score = score
 
                 # Show best net

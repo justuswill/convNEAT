@@ -56,7 +56,10 @@ class Genome:
         return saved
 
     def load(self, save):
-        if len(save) == 8:
+        # Legacy
+        if len(save) == 5:
+            [saved_optimizer, saved_nodes, saved_genes, self.score, self.net_parameters] = save
+        elif len(save) == 8:
             [saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change,
              self.net_parameters] = save
         else:
