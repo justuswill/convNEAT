@@ -26,6 +26,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
     License: BSD 3 clause
 
     Adapted to use a costume cluster init and scoring
+    Adapted to only produce clusters bigger than a threshold
 
     Parameters
     ----------
@@ -71,42 +72,33 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
 
     """
 
-    def __init__(self, n_clusters=8, metric="euclidean", max_iter=300, random_state=None,):
+    def __init__(self, n_clusters=8, metric="euclidean", max_iter=300, random_state=None, min_cluster_size=1):
         self.n_clusters = n_clusters
         self.metric = metric
         self.max_iter = max_iter
         self.random_state = random_state
+        self.min_cluster_size = min_cluster_size
 
     def _check_nonnegative_int(self, value, desc):
-        """Validates if value is a valid integer > 0"""
-
-        if (
-                value is None
-                or value <= 0
-                or not isinstance(value, (int, np.integer))
-        ):
-            raise ValueError(
-                "%s should be a nonnegative integer. "
-                "%s was given" % (desc, value)
-            )
+        """ Validates if value is a valid integer > 0 """
+        if value is None or value <= 0 or not isinstance(value, (int, np.integer)):
+            raise ValueError("%s should be a nonnegative integer. %s was given" % (desc, value))
 
     def _check_init_args(self):
-        """Validates the input arguments. """
-
+        """ Validates the input arguments. """
         # Check n_clusters and max_iter
         self._check_nonnegative_int(self.n_clusters, "n_clusters")
         self._check_nonnegative_int(self.max_iter, "max_iter")
 
-    def fit(self, X, old_centers=None):
-        """Fit K-Medoids to the provided data.
+    def fit(self, X, old_centers):
+        """
+        Fit K-Medoids to the provided data.
 
         Parameters
         ----------
         X : {array-like, sparse matrix}, shape = (n_samples, n_features), \
                 or (n_samples, n_samples) if metric == 'precomputed'
             Dataset to cluster.
-
-        y : Ignored
 
         Returns
         -------
@@ -133,6 +125,8 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
         for self.n_iter_ in range(0, self.max_iter):
             old_medoid_idxs = np.copy(medoid_idxs)
             labels = np.argmin(D[medoid_idxs, :], axis=0)
+            # Change labels to avoid small clusters
+            labels = self._steal(D, medoid_idxs, labels)
 
             # Update medoids with the new cluster indices
             self._update_medoid_idxs_in_place(D, labels, medoid_idxs)
@@ -162,7 +156,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
         return self
 
     def _update_medoid_idxs_in_place(self, D, labels, medoid_idxs):
-        """In-place update of the medoid indices"""
+        """ In-place update of the medoid indices """
 
         # Update the medoids for each cluster
         for k in range(self.n_clusters):
@@ -179,9 +173,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
                 )
                 continue
 
-            in_cluster_distances = D[
-                cluster_k_idxs, cluster_k_idxs[:, np.newaxis]
-            ]
+            in_cluster_distances = D[np.ix_(cluster_k_idxs, cluster_k_idxs)]
 
             # Calculate all costs from each point to all others in the cluster
             in_cluster_all_costs = np.sum(in_cluster_distances, axis=1)
@@ -195,6 +187,34 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
             # Adopt a new medoid if its distance is smaller then the current
             if min_cost < curr_cost:
                 medoid_idxs[k] = cluster_k_idxs[min_cost_idx]
+
+    def _steal(self, D, medoid_idxs, labels):
+        """
+        clusters that are to small steal data points from nearby clusters.
+        Don't steal from a cluster if it has only one data point left
+        and not from a cluster with smaller index if it hasn't enough data points
+        """
+        cluster_idxs = [np.where(labels == k)[0] for k in range(self.n_clusters)]
+        cluster_sizes = [len(cidxs) for cidxs in cluster_idxs]
+
+        # All clusters have correct size
+        if np.all(np.array(cluster_sizes) >= self.min_cluster_size):
+            return labels
+
+        for k in range(self.n_clusters):
+            while cluster_sizes[k] < self.min_cluster_size:
+                # Best steals from all possible other clusters
+                steals = [(j, np.argmin(D[cluster_idxs[j], medoid_idxs[k]]), np.min(D[cluster_idxs[j], medoid_idxs[k]]))
+                          for j in range(self.n_clusters) if j != k and cluster_sizes[j] > 0 and
+                          (cluster_sizes[j] > self.min_cluster_size or j > k)]
+                # Steal the one with the smallest distance to medoid of cluster k
+                j, oth, _ = min(steals, key=lambda x: x[2])
+                labels[cluster_idxs[j][oth]] = k
+                cluster_sizes[k] += 1
+                cluster_sizes[j] -= 1
+                cluster_idxs[k] = np.where(labels == k)[0]
+                cluster_idxs[j] = np.where(labels == j)[0]
+        return labels
 
     def _compute_score(self, distances):
         """
