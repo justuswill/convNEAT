@@ -1,10 +1,9 @@
 Ideas:
-- Test save genes params
-- min/max number of species
+- preserve gene net parameters under mutation
 - cluster center in exploration
 - restructure genomes for distance plot
 - better cluster threshold
-- inter-gene crossover
+(-) inter-gene crossover?
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty
 - Every gene has a detail to its weight. e+v of all weights, e+v in regions (e.g. col,row,blocks), all weights

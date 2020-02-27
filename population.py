@@ -39,7 +39,7 @@ class Population:
 
     def __init__(self, n, input_size, output_size, evaluate, parent_selection, train, cross_over=crossover,
                  name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
-                 epochs=2, load=None, save_mode="elites", monitor=None):
+                 min_species=1, max_species=10, epochs=2, load=None, save_mode="elites", monitor=None):
         # Evolution parameters
         self.evaluate = evaluate
         self.parent_selection = parent_selection
@@ -47,6 +47,8 @@ class Population:
         self.train = train
         self.epochs = epochs
         self.min_species_size = min_species_size
+        self.min_species = min_species
+        self.max_species = max_species
         self.elitism_rate = elitism_rate
         self.n_generations_no_change = n_generations_no_change
         self.tol = tol
@@ -75,7 +77,7 @@ class Population:
 
             # Begin with only one species
             self.n = n
-            self.number_of_species = 1
+            self.number_of_species = min_species
             self.species = {0: [Genome(self) for _ in range(n)]}
             self.best_genome = self.species[0][0].copy()
             self.top_score = 0
@@ -84,6 +86,19 @@ class Population:
             # Metadata
             self.generation = 1
             self.checkpoint_name = name or time.strftime("%d.%m-%H:%M")
+
+        self.check_args()
+
+    def check_args(self):
+        """ Checks if all parameters are correct """
+        if self.min_species <= 0:
+            raise ValueError("There always has to be a positive number of species")
+        if self.min_species > self.max_species:
+            raise ValueError("min_species (%d) has to be smaller than or equal max_species (%d)" %
+                             (self.min_species, self.max_species))
+        if self.min_species * self.min_species_size > self.n:
+            raise ValueError("Can't achieve %d species with size %d.\n"
+                             "Choose a higher n" % (self.min_species, self.min_species_size))
 
     def next_id(self):
         return next(self.id_generator)
@@ -112,7 +127,7 @@ class Population:
             self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
-    def cluster(self, threshold=120, rel_threshold=[1.2, 0.75]):
+    def cluster(self, threshold=120, rel_threshold=(1.2, 0.75)):
         """
         Cluster the genomes with K_Medoids-Clustering
         Change the number of species if needed (-2 .. +2)
@@ -151,7 +166,9 @@ class Population:
         cur_centers = [cur_centers_by_species[i] for i in sorted_species_ids]
 
         # Get performance of K-Medoids for some # of clusters near k
-        ids_to_check = list(range(max(1, k - 2), min(int(n / self.min_species_size) + 1, k + 3)))
+        low = max(self.min_species, k - 2)
+        up = min(self.max_species, int(n / self.min_species_size), k + 2) + 1
+        ids_to_check = list(range(low, up))
         medoids = {i: KMedoids(n_clusters=i, metric='precomputed', min_cluster_size=self.min_species_size).
                       fit(distances, old_centers=cur_centers)
                    for i in ids_to_check}
@@ -163,13 +180,13 @@ class Population:
                      ", ".join(["%s: %s" % (sp, sc) for sp, sc in zip(ids_to_check, list(scores.values()))]))
 
         # Change number of clusters
-        while k + 1 in ids_to_check and threshold * self.n <= scores[k + 1] < rel_threshold[1] * scores[k]:
+        while k + 1 in ids_to_check and threshold * self.n <= scores[k+1] < rel_threshold[1] * scores[k]:
             print("number of clusters increased by one")
             k += 1
             new_species = next(self.species_id_generator)
             sorted_species_ids += [new_species]
             species_ids += [new_species]
-        while k - 1 in ids_to_check and (scores[k] < threshold * self.n or scores[k - 1] < rel_threshold[0] * scores[k]):
+        while k - 1 in ids_to_check and (scores[k] < threshold * self.n or scores[k-1] < rel_threshold[0] * scores[k]):
             print("number of clusters increased by one")
             k -= 1
 
@@ -238,11 +255,11 @@ class Population:
                       for sp in sp_ids[i + 1] - sp_ids[i]]
             # killed species
             dead_sp = [[pos[i][sp], pos[i + 1][max([p for p in sp_ids[i + 1] if p < sp])]
-            if min(sp_ids[i + 1]) < sp else self.n]
+                       if min(sp_ids[i + 1]) < sp else self.n]
                        for sp in sp_ids[i] - sp_ids[i + 1]]
             # Line on top
-            cieling = [[self.n, self.n]] if i > 0 else [[0, self.n]]
-            lines = cieling + connections + new_sp + dead_sp
+            ceiling = [[self.n, self.n]] if i > 0 else [[0, self.n]]
+            lines = ceiling + connections + new_sp + dead_sp
             # Plot scores
             patches = []
             for sp in sp_ids[i + 1]:
@@ -280,6 +297,8 @@ class Population:
                           for i in range(start, self.generation)])
                     for sp in species_ids if sp in self.history[start].keys()]
             for sp, past_scores in past:
+                if len(species_ids) <= self.min_species:
+                    break
                 if max(past_scores) < past_scores[0] + self.tol:
                     # Get elites
                     elitism = math.ceil(self.elitism_rate * len(evaluated_genomes_by_species[sp]))
@@ -290,7 +309,10 @@ class Population:
                         g, s = elite_genomes.pop(0)
                         new_sp = min(species_ids, key=lambda sp: g.dissimilarity(self.species_repr[sp]))
                         evaluated_genomes_by_species[new_sp] += [(g, s)]
+
+                    # Delete genomes
                     del evaluated_genomes_by_species[sp]
+                    species_ids.remove(sp)
 
     def new_species_sizes(self, score_by_species):
         """

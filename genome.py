@@ -21,7 +21,8 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=None):
+    def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=0,
+                 net_parameters=None, loss=float('inf'), no_change=0):
         self.population = population
         self.optimizer = optimizer or self.init_optimizer()
 
@@ -30,13 +31,13 @@ class Genome:
         self.genes_by_id, self.nodes_by_id = self.dicts_by_id()
 
         # These are set after training. For checkpointing and to be used by elite genomes
-        self.net_parameters = None
+        self.net_parameters = net_parameters
         self.score = None
 
         # Early stopping etc.
-        self.loss = float('inf')
-        self.trained = trained or 0
-        self.no_change = 0
+        self.loss = loss
+        self.trained = trained
+        self.no_change = no_change
 
     def __repr__(self):
         r = super().__repr__()
@@ -103,7 +104,7 @@ class Genome:
             if mutate[i]:
                 node.mutate_random()
 
-    def dps(self, id_s, id_t, pre=None):
+    def dfs(self, id_s, id_t, pre=None):
         # depth first search in feed-forward net
         if id_s == id_t:
             return True
@@ -123,7 +124,7 @@ class Genome:
         Returns whether deletion was successful
         """
         gene.enabled = False
-        if self.dps(0, 2) is False:
+        if self.dfs(0, 2) is False:
             gene.enabled = True
             return False
         return True
@@ -272,9 +273,11 @@ class Genome:
     def copy(self):
         return Genome(self.population, optimizer=self.optimizer.copy(),
                       nodes_and_genes=[[node.copy() for node in self.nodes],
-                                       [gene.copy() for gene in self.genes]])
+                                       [gene.copy() for gene in self.genes]],
+                      net_parameters=self.net_parameters.copy() if self.net_parameters is not None else None,
+                      no_change=self.no_change, loss=self.loss,  trained=self.trained,)
 
-    def dissimilarity(self, other, c=[5, 5, 5, 2, 5, 1]):
+    def dissimilarity(self, other, c=(5, 5, 5, 2, 5, 1)):
         """
         The distance/dissimilarity of two genomes, similar to NEAT
         dist = (c0*S + c1*D + c2*E)/N + c3*T + c4*K + c5*X

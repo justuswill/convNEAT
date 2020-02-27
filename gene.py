@@ -13,7 +13,7 @@ class Gene:
     (or to what it will be changed if its a initializing edge)
     """
 
-    def __init__(self, id, id_in, id_out, mutate_to=None, enabled=True):
+    def __init__(self, id, id_in, id_out, mutate_to=None, enabled=True, net_parameters=None):
         self.id = id
         self.id_in = id_in
         self.id_out = id_out
@@ -22,8 +22,7 @@ class Gene:
         self.mutate_to = mutate_to or self.init_mutate_to()
 
         # Weights & bias - To be set after first training.
-        self.net_parameters = dict()
-        # TODO COPY THIS + ENABLED
+        self.net_parameters = net_parameters or dict()
 
     def __repr__(self):
         r = super().__repr__()
@@ -67,8 +66,10 @@ class KernelGene(Gene):
     """
 
     def __init__(self, id, id_in, id_out, size=[None, None], stride=None, padding=None,
-                 depth_size_change=None, depth_mult=None, enabled=True, width=None, height=None):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
+                 depth_size_change=None, depth_mult=None, enabled=True, width=None, height=None,
+                 net_parameters=None):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(),
+                         enabled=enabled, net_parameters=net_parameters)
 
         if size is not None:
             width, height = size
@@ -95,6 +96,8 @@ class KernelGene(Gene):
         self.width, self.height, self.stride, self.padding, self.depth_size_change, self.depth_mult, self.enabled = save
         return self
 
+    # Initialization of gene parameters
+
     def init_width(self):
         return random.randrange(3, 6)
 
@@ -116,17 +119,21 @@ class KernelGene(Gene):
     def init_mutate_to(self):
         return [[KernelGene, PoolGene, DenseGene], [1, 2, 0]]
 
+    # Mutations on gene parameters, discard net parameters if obsolete
+
     def mutate_width(self):
         self.width = max(1, self.width + random.choice([-2, -1, 1, 2]))
         # force padding <= half of kernel size
         if 2 * self.padding > self.width:
             self.padding = self.width // 2
+        self.net_parameters = dict()
 
     def mutate_height(self):
         self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
         # force padding <= half of kernel size
         if 2 * self.padding > self.height:
             self.padding = self.height // 2
+        self.net_parameters = dict()
 
     def mutate_size(self):
         r = random.choice([-2, -1, 1, 2])
@@ -134,6 +141,7 @@ class KernelGene(Gene):
         # force padding <= half of kernel size
         if 2 * self.padding > min(self.width, self.height):
             self.padding = min(self.width // 2, self.height // 2)
+        self.net_parameters = dict()
 
     def mutate_stride(self):
         self.stride = max(1, self.stride + random.choice([-2, -1, 1, 2]))
@@ -143,9 +151,11 @@ class KernelGene(Gene):
 
     def mutate_depth_size_change(self):
         self.depth_size_change = self.depth_size_change + random.choice([-2, -1, 1, 2])
+        self.net_parameters = dict()
 
     def mutate_depth_mult(self):
         self.depth_mult = max(1, self.depth_mult + random.choice([-2, -1, 1, 2]))
+        self.net_parameters = dict()
 
     def mutate_random(self):
         mutations = random_choices((self.mutate_width, self.mutate_height, self.mutate_size,
@@ -162,16 +172,19 @@ class KernelGene(Gene):
         # force out_depth > 0
         if not in_depth + self.depth_size_change > 0:
             self.depth_size_change = 1 - in_depth
+            self.net_parameters = dict()
             logging.debug('Mutated depth_size_change on gene %d' % self.id)
 
         # force out_width > 0
         if not in_width - (self.width - 1) + 2 * self.padding > 0:
             self.width = 2 * self.padding + in_width
+            self.net_parameters = dict()
             logging.debug('Mutated width on gene %d' % self.id)
 
         # force out_height > 0
         if not in_height - (self.height - 1) + 2 * self.padding > 0:
             self.height = 2 * self.padding + in_height
+            self.net_parameters = dict()
             logging.debug('Mutated height on gene %d' % self.id)
 
         # force padding <= half of kernel size
@@ -186,7 +199,8 @@ class KernelGene(Gene):
     def copy(self, id=None, id_in=None, id_out=None):
         return KernelGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
                           size=[self.width, self.height], stride=self.stride, padding=self.padding,
-                          depth_size_change=self.depth_size_change, depth_mult=self.depth_mult)
+                          depth_size_change=self.depth_size_change, depth_mult=self.depth_mult,
+                          enabled=self.enabled, net_parameters=self.net_parameters)
 
     def dissimilarity(self, other):
         if not isinstance(other, self.__class__):
@@ -205,8 +219,9 @@ class PoolGene(Gene):
     Width, Height are arg for read_human_readable only
     """
     def __init__(self, id, id_in, id_out, pooling=None, size=[None, None], stride=None, padding=None, enabled=True,
-                 width=None, height=None):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
+                 width=None, height=None, net_parameters=None):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(),
+                         enabled=enabled, net_parameters=net_parameters)
 
         self.possible_pooling = ['max', 'avg']
 
@@ -233,6 +248,8 @@ class PoolGene(Gene):
         self.pooling, self.width, self.height, self.stride, self.padding, self.enabled = save
         return self
 
+    # Initialization of gene parameters
+
     def init_pooling(self):
         return random.choice(self.possible_pooling)
 
@@ -251,6 +268,8 @@ class PoolGene(Gene):
     def init_mutate_to(self):
         return [[KernelGene, PoolGene, DenseGene], [4, 1, 0]]
 
+    # Mutations on gene parameters, discard gene parameters if obsolete
+
     def mutate_pooling(self):
         self.pooling = random.choice([x for x in self.possible_pooling if x != self.pooling])
 
@@ -259,12 +278,14 @@ class PoolGene(Gene):
         # force padding <= half of kernel size
         if 2 * self.padding > self.width:
             self.padding = self.width // 2
+        self.net_parameters = dict()
 
     def mutate_height(self):
         self.height = max(1, self.height + random.choice([-2, -1, 1, 2]))
         # force padding <= half of kernel size
         if 2 * self.padding > self.height:
             self.padding = self.height // 2
+        self.net_parameters = dict()
 
     def mutate_size(self):
         r = random.choice([-2, -1, 1, 2])
@@ -272,6 +293,7 @@ class PoolGene(Gene):
         # force padding <= half of kernel size
         if 2 * self.padding > min(self.width, self.height):
             self.padding = min(self.width // 2, self.height // 2)
+        self.net_parameters = dict()
 
     def mutate_stride(self):
         self.stride = max(1, self.stride + random.choice([-2, -1, 1, 2]))
@@ -294,16 +316,19 @@ class PoolGene(Gene):
         # force out_width > 0
         if not in_width - (self.width - 1) + 2 * self.padding > 0:
             self.width = 2 * self.padding + in_width
+            self.net_parameters = dict()
             logging.debug('Mutated width on gene %d' % self.id)
 
         # force out_height > 0
         if not in_height - (self.height - 1) + 2 * self.padding > 0:
             self.height = 2 * self.padding + in_height
+            self.net_parameters = dict()
             logging.debug('Mutated height on gene %d' % self.id)
 
         # force padding <= half of kernel size
         if 2 * self.padding > min(self.width, self.height):
             self.padding = min(self.width // 2, self.height // 2)
+            self.net_parameters = dict()
             logging.debug('Mutated padding on gene %d' % self.id)
 
         out_depth = in_depth
@@ -313,7 +338,8 @@ class PoolGene(Gene):
 
     def copy(self, id=None, id_in=None, id_out=None):
         return PoolGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
-                        size=[self.width, self.height], pooling=self.pooling, padding=self.padding, stride=self.stride)
+                        size=[self.width, self.height], pooling=self.pooling, padding=self.padding, stride=self.stride,
+                        enabled=self.enabled, net_parameters=self.net_parameters)
 
     def dissimilarity(self, other):
         if not isinstance(other, self.__class__):
@@ -333,8 +359,9 @@ class DenseGene(Gene):
     so the number of hidden neurons per layer it determined by the distance to the layer before
     """
 
-    def __init__(self, id, id_in, id_out, size_change=None, activation=None, enabled=True):
-        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(), enabled=enabled)
+    def __init__(self, id, id_in, id_out, size_change=None, activation=None, enabled=True, net_parameters=None):
+        super().__init__(id, id_in, id_out, mutate_to=self.init_mutate_to(),
+                         enabled=enabled, net_parameters=net_parameters)
 
         self.possible_activations = ['relu', 'tanh']
 
@@ -353,6 +380,8 @@ class DenseGene(Gene):
         self.size_change, self.activation, self.enabled = save
         return self
 
+    # Initialization of gene parameters
+
     def init_size_change(self):
         return random.choice(list(range(-10, -4)) + list(range(5, 11)))
 
@@ -362,8 +391,11 @@ class DenseGene(Gene):
     def init_mutate_to(self):
         return [[KernelGene, PoolGene, DenseGene], [0, 0, 1]]
 
+    # Mutations on gene parameters, discard gene parameters if obsolete
+
     def mutate_size_change(self):
         self.size_change = self.size_change + random.choice(list(range(-10, -4)) + list(range(5, 11)))
+        self.net_parameters = dict()
 
     def mutate_activation(self):
         self.activation = random.choice([x for x in self.possible_activations if x != self.activation])
@@ -379,13 +411,14 @@ class DenseGene(Gene):
         # force out_depth > 0
         if in_size[0] + self.size_change <= 0:
             self.size_change = 1 - in_size[0]
+            self.net_parameters = dict()
             logging.debug('Mutateted size_change on gene %d' % self.id)
 
         return [in_size[0], in_size[1], in_size[2] + self.size_change]
 
     def copy(self, id=None, id_in=None, id_out=None):
-        return DenseGene(id or self.id, id_in or self.id_in, id_out or self.id_out,
-                         size_change=self.size_change, activation=self.activation)
+        return DenseGene(id or self.id, id_in or self.id_in, id_out or self.id_out, size_change=self.size_change,
+                         activation=self.activation, enabled=self.enabled, net_parameters=self.net_parameters)
 
     def dissimilarity(self, other):
         if not isinstance(other, self.__class__):
