@@ -23,7 +23,7 @@ class Node:
         self.role = role
 
         self.possible_merges = ['upsample', 'downsample', 'padding', 'avgsample']
-        self.max_neurons = 20000
+        self.max_neurons = 200000  # TODO
 
         self.merge = merge or self.init_merge()
         self.size = None
@@ -61,12 +61,13 @@ class Node:
                      'avgsample': lambda x: [sum([l[1] for l in x]) // len(x), sum([l[2] for l in x]) // len(x)]}
         # add depths of inputs
         out_size = [sum([i[0] for i in in_sizes]), *mergesize[self.merge](in_sizes)]
-        # Don't crash RAM
+
+        # If to much neurons use downsampling to minimize
         if np.prod(out_size) > self.max_neurons:
-            # TODO Fehler auffangen
             self.merge = 'downsample'
             logging.debug('Mutated merge on gene %d' % self.id)
-            return self.output_size(in_sizes)
+            out_size = [sum([i[0] for i in in_sizes]), *mergesize[self.merge](in_sizes)]
+
         self.target_size = out_size
         return [1, 1, int(np.prod(out_size))] if self.role in ['flatten', 'output'] else out_size
 

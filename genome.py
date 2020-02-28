@@ -56,7 +56,7 @@ class Genome:
             saved += [self.net_parameters]
         return saved
 
-    def load(self, save):
+    def load(self, save, load_params=True):
         # Legacy
         if len(save) == 5:
             [saved_optimizer, saved_nodes, saved_genes, self.score, self.net_parameters] = save
@@ -65,6 +65,8 @@ class Genome:
              self.net_parameters] = save
         else:
             saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change = save
+            self.net_parameters = None
+        if not load_params and self.net_parameters is not None:
             self.net_parameters = None
         self.optimizer = saved_optimizer[0]().load(saved_optimizer[1])
         self.nodes = [node[0](node[1], node[2]).load(node[3]) for node in saved_nodes]
@@ -113,7 +115,7 @@ class Genome:
             return False
 
         for p in neig:
-            if self.dps(p, id_t, pre=id_s):
+            if self.dfs(p, id_t, pre=id_s):
                 return True
         return False
 
@@ -130,22 +132,22 @@ class Genome:
         return True
 
     def mutate_disable_edge(self, tries=2):
-        enabled = [gene for gene in self.genes if gene.enabled]
-        if len(enabled) > 0:
+        enabled_edges = [gene for gene in self.genes if gene.enabled]
+        if len(enabled_edges) > 0:
             while tries > 0:
-                if self.disable_edge(random.choice(enabled)):
+                if self.disable_edge(random.choice(enabled_edges)):
                     return
                 tries -= 1
 
     def enable_edge(self):
-        disabled = [gene for gene in self.genes if not gene.enabled]
-        if len(disabled) > 0:
-            random.choice(disabled).enabled = True
+        disabled_edges = [gene for gene in self.genes if not gene.enabled]
+        if len(disabled_edges) > 0:
+            random.choice(disabled_edges).enabled = True
 
     def split_edge(self, this_gen_mutations):
-        enabled = [gene for gene in self.genes if gene.enabled]
-        if len(enabled) > 0:
-            edge = random.choice(enabled)
+        enabled_edges = [gene for gene in self.genes if gene.enabled]
+        if len(enabled_edges) > 0:
+            edge = random.choice(enabled_edges)
             [d1, d2] = [self.nodes_by_id[edge.id_in].depth, self.nodes_by_id[edge.id_out].depth]
 
             # Save innovation numbers
@@ -153,11 +155,11 @@ class Genome:
                 this_gen_mutations[edge.id] = [f() for f in [self.next_id]*3]
             [id1, id2, id3] = this_gen_mutations[edge.id]
 
-            edge.enabled = False
             # Guarantee d1<dn<d2 and no duplicates with cut-off normalvariate
             new_node = Node(id1, min(d2+(d1+d2)/10, max(d1-(d1+d2)/10, random.normalvariate((d1 + d2) / 2, 0.01))))
             new_edge_1 = edge.copy(id2, edge.id_in, new_node.id)
             new_edge_2 = edge.add_after(id3, new_node.id, edge.id_out)
+            edge.enabled = False
             self.nodes += [new_node]
             self.genes += [new_edge_1, new_edge_2]
             self.nodes_by_id[id1] = new_node

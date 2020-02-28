@@ -35,11 +35,13 @@ class Population:
                        bare:    save all elite           parameters
                        None:    don't save               parameters
     monitor          - if the results should be shown graphically
+    load_params      - if the weights etc should be loaded when using load
     """
 
     def __init__(self, n, input_size, output_size, evaluate, parent_selection, train, cross_over=crossover,
                  name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
-                 min_species=1, max_species=10, epochs=2, load=None, save_mode="elites", monitor=None):
+                 min_species=1, max_species=10, epochs=2, load=None, save_mode="elites", monitor=None,
+                 load_params=True):
         # Evolution parameters
         self.evaluate = evaluate
         self.parent_selection = parent_selection
@@ -66,7 +68,7 @@ class Population:
                                               "bare": [1, False], "None": [0, False]}[save_mode]
         # Load if a checkpoint is given
         if load is not None:
-            self.load_checkpoint(*load)
+            self.load_checkpoint(*load, load_params=load_params)
         else:
             # Historical markers starting at 5
             self.id_generator = itertools.count(5)
@@ -117,14 +119,14 @@ class Population:
         with open(os.path.join(_dir, "%02d.cp" % self.generation), "wb") as c:
             pickle.dump(save, c)
 
-    def load_checkpoint(self, checkpoint_name, generation):
+    def load_checkpoint(self, checkpoint_name, generation, load_params=True):
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
             [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
              self.input_size, self.output_size, self.checkpoint_name, self.top_score, self.history,
              saved_best_genome, saved_genomes] = pickle.load(c)
-            self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1])
-            self.species = {species: [genome[0](self).load(genome[1]) for genome in genomes]
+            self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1], load_params=load_params)
+            self.species = {species: [genome[0](self).load(genome[1], load_params=load_params) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
     def cluster(self, threshold=120, rel_threshold=(1.2, 0.75)):

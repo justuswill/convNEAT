@@ -1,6 +1,8 @@
 import os
 import matplotlib.pyplot as plt
 
+import torch
+
 from population import Population
 from genome import Genome
 from optimizer import ADAMGene, SGDGene
@@ -110,7 +112,7 @@ def from_human_readable(evaluate, input_size, output_size):
         return
 
 
-def show_genomes(input_size):
+def show_genomes(input_size, simultan=False):
     # What to show
     checkpoint = input("checkpoint name:")
     gens = input("generations ['all' / list separated by ' ']:")
@@ -123,7 +125,7 @@ def show_genomes(input_size):
         generations = list(map(int, gens.split(" ")))
 
     for i in generations:
-        p = Population(1, 1, 1, 1, 1, 1, 1, load=(checkpoint, i))
+        p = Population(1, 1, 1, 1, 1, 1, 1, load=(checkpoint, i), load_params=False)
         show = 7
         fig, axs = plt.subplots(len(p.species), show, squeeze=False, figsize=(20, 10))
         fig.canvas.set_window_title('Generation %d' % i)
@@ -132,5 +134,23 @@ def show_genomes(input_size):
                 g.visualize(ax=axs[j, k], input_size=input_size)
                 axs[j, k].title.set_text('%sacc: %s %%' % ("Species %d " % sp if k == 0 else "",
                                                            "%.2f" % (100 * g.score) if g.score is not None else "-"))
-        plt.pause(0.01)
+        if simultan:
+            plt.pause(0.01)
+        else:
+            plt.show()
     plt.show()
+
+"""
+    for i in generations:
+        p = Population(1, 1, 1, 1, 1, 1, 1, load=(checkpoint, i))
+        show = 7
+        fig, axs = plt.subplots(len(p.species), show, squeeze=False, figsize=(20, 10))
+        fig.canvas.set_window_title('Generation %d' % i)
+        for j, sp in enumerate(sorted(p.species.keys(), key=lambda x: p.history[-1][x][1] or 0, reverse=True)):
+            p.species_repr[sp].visualize(ax=axs[j, 0], input_size=input_size)
+            axs[j, k].title.set_text('species %d, mean_acc: %s %%' % (sp, p.history[j-1][sp][1] * 100))
+            for k, g in enumerate(sorted(p.species[sp], key=lambda x: x.score or 0, reverse=True)[:show]):
+                g.visualize(ax=axs[j, k], input_size=input_size)
+                axs[j, k].title.set_text('acc: %.2f %%' % ((100 * g.score) if g.score is not None else "-"))
+        plt.pause(0.01)
+"""
