@@ -13,3 +13,10 @@ def random_choices(choices, chances):
 def limited_growth(t, cap, relevance):
     k = 2.2/relevance
     return cap*(1-np.exp(-k*t))
+
+
+def score_decay(accuracy, training, decay_factor=0.01):
+    """
+    With increasing training linearly increase the log error [log(10, 1-acc)] on the data
+    """
+    return 1 - 10**(np.log10(1 - accuracy) + decay_factor * training)

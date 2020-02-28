@@ -19,10 +19,13 @@ def build_net_from_genome(genome, input_size, output_size):
     if genome.net_parameters is not None:
         net.load_state_dict(genome.net_parameters)
     else:
+        # TODO
+        """
         all_net_parameters = {k: v for gene in genome.genes for k, v in gene.net_parameters.items()
                               if k in net_dict}
         net_dict.update(all_net_parameters)
         net.load_state_dict(net_dict)
+        """
 
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -90,7 +93,7 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
                 break
     print('Finished training')
 
-    # Save weights and bias
+    # Save weights and bias for conv/pool
     if save_gene_param:
         for name, parameter in net.state_dict().items():
             if name.startswith('conv') or name.startswith('pool_'):
@@ -99,6 +102,9 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
     # Save net
     if save_net_param:
         genome.net_parameters = net.state_dict()
+        # On CPU
+        for t in genome.net_parameters.values():
+            t.to('cpu')
 
 
 def evaluate(net, torch_device, data_loader_test, output_size):

@@ -1,8 +1,7 @@
 Ideas:
 - preserve gene net parameters under mutation
 - cluster center in exploration
-- restructure genomes for distance plot
-- better cluster threshold
+(?) restructure genomes for distance plot / dist to species repr
 (-) inter-gene crossover?
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
   More training -> higher penalty

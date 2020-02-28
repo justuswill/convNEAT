@@ -13,6 +13,7 @@ from KMedoids import KMedoids
 from genome import Genome
 from net import build_net_from_genome
 from crossover import crossover
+from tools import score_decay
 
 
 class Population:
@@ -20,7 +21,7 @@ class Population:
     A population of genomes to be evolved
     -----
     n                - population size
-    evaluate         - how to get a score from genome
+    evaluate         - how to get a acc from genome
     parent_selection - how parents are selected from the population
     crossover        - how to combine genomes to form new ones
     train            - how to train net nets
@@ -80,9 +81,11 @@ class Population:
             # Begin with only one species
             self.n = n
             self.number_of_species = min_species
-            self.species = {0: [Genome(self) for _ in range(n)]}
+            self.species = {i: [Genome(self) for _ in range(n // min_species if i > 0
+                                                            else (n // min_species) + (n % min_species))]
+                            for i in range(min_species)}
             self.best_genome = self.species[0][0].copy()
-            self.top_score = 0
+            self.top_acc = 0
             self.history = []
 
             # Metadata
@@ -107,7 +110,7 @@ class Population:
 
     def save_checkpoint(self):
         save = [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
-                self.input_size, self.output_size, self.checkpoint_name, self.top_score, self.history,
+                self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
                 (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
@@ -123,7 +126,7 @@ class Population:
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
             [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
-             self.input_size, self.output_size, self.checkpoint_name, self.top_score, self.history,
+             self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
              saved_best_genome, saved_genomes] = pickle.load(c)
             self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1], load_params=load_params)
             self.species = {species: [genome[0](self).load(genome[1], load_params=load_params) for genome in genomes]
@@ -162,7 +165,7 @@ class Population:
         cumlen = np.cumsum([0] + species_len)
         cur_centers_by_species = dict()
         labels = np.array([sp for sp in self.species.keys() for _ in self.species[sp]])
-        for i, sp in enumerate(sorted_species_ids):
+        for i, sp in enumerate(species_ids):
             in_cluster_distances = distances[np.ix_(labels == sp, labels == sp)]
             cur_centers_by_species[sp] = np.argmin(np.sum(in_cluster_distances, axis=1)) + cumlen[i]
         cur_centers = [cur_centers_by_species[i] for i in sorted_species_ids]
@@ -288,20 +291,20 @@ class Population:
 
     def species_death(self, evaluated_genomes_by_species):
         """
-        Check for species that haven't improved in <n_generations_no_change> and kill them.
+        Check for species that haven't improved their mean accuracy in <n_generations_no_change> and kill them.
         Elites are adopted by other species.
         The remaining space is filled by other species
         """
         if self.generation > self.n_generations_no_change:
             species_ids = list(evaluated_genomes_by_species.keys())
             start = self.generation - self.n_generations_no_change - 1
-            past = [(sp, [self.history[i][sp][1]
-                          for i in range(start, self.generation)])
-                    for sp in species_ids if sp in self.history[start].keys()]
-            for sp, past_scores in past:
+            past = {sp: [self.history[i][sp][1] for i in range(start, self.generation)]
+                    for sp in species_ids if sp in self.history[start].keys()}
+            logging.info("Species past: %s" % past)
+            for sp, past_scores in past.items():
                 if len(species_ids) <= self.min_species:
                     break
-                if max(past_scores) < past_scores[0] + self.tol:
+                if max(past_scores[1:]) < past_scores[0] + self.tol:
                     # Get elites
                     elitism = math.ceil(self.elitism_rate * len(evaluated_genomes_by_species[sp]))
                     elite_genomes = [(g, s) for g, s in evaluated_genomes_by_species[sp][:elitism]]
@@ -338,15 +341,18 @@ class Population:
         Train a instantiated net for every genome in the population
         Evaluate every net and return the scored genomes and species
 
-        Updates plots for best and current net and fill scores of species
+        Updates plots for best and current net and fill scores/acc of species
         Saves the net with its parameters for continuation of training later on (used by elites)
         Also saves weights in every gene as start for child genomes
         """
         counter = itertools.count(1)
         evaluated_genomes_by_species = dict()
         score_by_species = dict()
+        acc_by_species = dict()
         for sp, genomes in sorted(self.species.items()):
             evaluated_genomes = []
+            sp_scores = []
+            sp_accs = []
             for g in genomes:
                 i = next(counter)
                 print('Instantiating neural network from the following genome in species %d - (%d/%d):' %
@@ -363,29 +369,32 @@ class Population:
                     net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
                     self.train(g, net, optim, criterion, epochs=self.epochs,
                                save_net_param=self.save_genomes >= 1, save_gene_param=self.save_genes)
-                    score = self.evaluate(net)
+                    acc = self.evaluate(net)
                 except RuntimeError as e:
                     logging.info("Net failed to train:\n%s" % e)
-                    score = 0
-                g.score = score
+                    acc = 0
+                g.acc = acc
+                score = score_decay(acc, g.trained)
 
                 # Show best net
-                if score > self.top_score:
-                    self.top_score = score
+                if acc > self.top_acc:
+                    self.top_acc = acc
                     self.best_genome = g.copy()
                     if self.monitor is not None:
                         self.monitor.plot(0, (g.__class__, g.save(parameters=False)), kind='net-plot', title='best',
-                                          input_size=(1, 28, 28), score=score, clear=True, show=True)
+                                          input_size=(1, 28, 28), acc=acc, clear=True, show=True)
 
                 evaluated_genomes += [(g, score)]
+                sp_scores += [score]
+                sp_accs += [acc]
             evaluated_genomes_by_species[sp] = sorted(evaluated_genomes, key=lambda x: x[1], reverse=True)
 
-            # Score of species is the mean of their genomes' scores
-            sp_scores = [s for g, s in evaluated_genomes]
+            # Score/acc of species is the mean of their genomes' scores
             score_by_species[sp] = sum(sp_scores) / len(sp_scores)
+            acc_by_species[sp] = sum(sp_accs) / len(sp_accs)
 
-            # Update History
-            self.history[-1][sp] = [self.history[-1][sp][0], score_by_species[sp]]
+            # Update History with acc
+            self.history[-1][sp] = [self.history[-1][sp][0], acc_by_species[sp]]
 
             # Fill species plot
             if self.monitor is not None:
@@ -394,7 +403,7 @@ class Population:
                 p.set_array(np.array(colors))
                 p.set_clim([0, 1])
                 self.monitor.plot(2, p, kind='add_collection')
-        return [evaluated_genomes_by_species, score_by_species]
+        return [evaluated_genomes_by_species, score_by_species, acc_by_species]
 
     def evolve(self):
         """
@@ -408,10 +417,10 @@ class Population:
         # show best net
         if self.monitor is not None:
             self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save(parameters=False)), kind='net-plot',
-                              input_size=self.input_size, score=self.top_score, title='best', clear=True, show=True)
+                              input_size=self.input_size, acc=self.top_acc, title='best', clear=True, show=True)
 
         self.cluster()
-        evaluated_genomes_by_species, score_by_species = self.train_nets()
+        evaluated_genomes_by_species, score_by_species, acc_by_species = self.train_nets()
 
         # Saving checkpoint with net parameters
         print("Saving checkpoint after training\n")
@@ -419,8 +428,8 @@ class Population:
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
-            print('Species %d with %d members - mean acc %.2f:\n' %
-                  (species, len(evaluated_genomes), score_by_species[species]))
+            print('Species %d with %d members - score: %.2f, mean acc %.2f:\n' %
+                  (species, len(evaluated_genomes), score_by_species[species], acc_by_species[species]))
             for g, s in evaluated_genomes:
                 r = repr(g)
                 if len(r) > 64:

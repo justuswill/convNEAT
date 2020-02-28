@@ -21,7 +21,7 @@ class Genome:
     Shape and Number of neurons in a node are only decoded indirectly
     """
 
-    def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=0,
+    def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=0, reward=0,
                  net_parameters=None, loss=float('inf'), no_change=0):
         self.population = population
         self.optimizer = optimizer or self.init_optimizer()
@@ -32,12 +32,15 @@ class Genome:
 
         # These are set after training. For checkpointing and to be used by elite genomes
         self.net_parameters = net_parameters
-        self.score = None
+        self.acc = None
 
         # Early stopping etc.
         self.loss = loss
         self.trained = trained
         self.no_change = no_change
+
+        # Get extra training if good performance
+        self.reward = reward
 
     def __repr__(self):
         r = super().__repr__()
@@ -51,7 +54,7 @@ class Genome:
         saved = [(self.optimizer.__class__, self.optimizer.save()),
                  [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
                  [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes],
-                 self.score, self.loss, self.trained, self.no_change]
+                 self.acc, self.loss, self.trained, self.no_change]
         if parameters:
             saved += [self.net_parameters]
         return saved
@@ -59,12 +62,12 @@ class Genome:
     def load(self, save, load_params=True):
         # Legacy
         if len(save) == 5:
-            [saved_optimizer, saved_nodes, saved_genes, self.score, self.net_parameters] = save
+            [saved_optimizer, saved_nodes, saved_genes, self.acc, self.net_parameters] = save
         elif len(save) == 8:
-            [saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change,
+            [saved_optimizer, saved_nodes, saved_genes, self.acc, self.loss, self.trained, self.no_change,
              self.net_parameters] = save
         else:
-            saved_optimizer, saved_nodes, saved_genes, self.score, self.loss, self.trained, self.no_change = save
+            saved_optimizer, saved_nodes, saved_genes, self.acc, self.loss, self.trained, self.no_change = save
             self.net_parameters = None
         if not load_params and self.net_parameters is not None:
             self.net_parameters = None
@@ -196,14 +199,15 @@ class Genome:
     def visualize(self, ax, input_size=None, dbug=False):
         self.set_sizes(input_size)
         # Enabled and reachable edges
+        useful_edges = [e for e in self.genes if e.enabled and self.nodes_by_id[e.id_in].target_size is not None]
         edgelist = ['%d %d {\'class\':\'%s\'}' % (e.id_in, e.id_out, str(type(e)).split('.')[-1][:-2])
-                    for e in self.genes if e.enabled and self.nodes_by_id[e.id_in].target_size is not None]
+                    for e in useful_edges]
         G = nx.parse_edgelist(edgelist)
         edge_color_dict = {'DenseGene': 'green', 'KernelGene': 'darkorange', 'PoolGene': 'darkblue'}
         node_color_dict = {None: 'skyblue', 'flatten': 'salmon', 'input': 'turquoise', 'output': 'turquoise'}
         edge_colors = [edge_color_dict[G[u][v]['class']] for u, v in G.edges()]
         node_colors = [node_color_dict[self.nodes_by_id[int(n)].role] for n in G.nodes()]
-        edge_labels = {(str(e.id_in), str(e.id_out)): e.short_repr() for e in self.genes if e.enabled}
+        edge_labels = {(str(e.id_in), str(e.id_out)): e.short_repr() for e in useful_edges}
         node_labels = {str(n.id): n.short_repr() for n in self.nodes}
         pos = self.graph_positioning()
 

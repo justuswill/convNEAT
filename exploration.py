@@ -140,7 +140,9 @@ def show_genomes(input_size, simultan=False):
             plt.show()
     plt.show()
 
+
 """
+    # Plot Species representative ?
     for i in generations:
         p = Population(1, 1, 1, 1, 1, 1, 1, load=(checkpoint, i))
         show = 7
