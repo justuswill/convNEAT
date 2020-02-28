@@ -1,4 +1,5 @@
 Ideas:
+- find CUDA memory leak
 - preserve gene net parameters under mutation
 - cluster center in exploration
 (?) restructure genomes for distance plot / dist to species repr
