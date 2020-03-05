@@ -58,11 +58,11 @@ class Population:
 
         # Plotting and tracking training progress
         self.monitor = monitor
-        # On the go plotting of species score
         self.polygons = dict()
 
         # Species centers calculated after first clustering
         self.species_repr = None
+        self.converged = False
 
         # What to save: save_genomes =1 saves elites =2 saves all genomes
         self.save_genomes, self.save_genes = {"all": [2, True], "elites": [1, True], "genomes": [2, False],
@@ -289,12 +289,15 @@ class Population:
             self.monitor.plot(2, list(range(self.generation + 1)), kind="set_xticks")
         self.monitor.send()
 
-    def species_death(self, evaluated_genomes_by_species):
+    def species_death(self, evaluated_genomes_by_species, score_by_species):
         """
         Check for species that haven't improved their mean accuracy in <n_generations_no_change> and kill them.
         Elites are adopted by other species.
         The remaining space is filled by other species
+
+        Returns changed score_by_species
         """
+        killed = False
         if self.generation > self.n_generations_no_change:
             species_ids = list(evaluated_genomes_by_species.keys())
             start = self.generation - self.n_generations_no_change - 1
@@ -305,6 +308,8 @@ class Population:
                 if len(species_ids) <= self.min_species:
                     break
                 if max(past_scores[1:]) < past_scores[0] + self.tol:
+                    killed = True
+
                     # Get elites
                     elitism = math.ceil(self.elitism_rate * len(evaluated_genomes_by_species[sp]))
                     elite_genomes = [(g, s) for g, s in evaluated_genomes_by_species[sp][:elitism]]
@@ -318,6 +323,12 @@ class Population:
                     # Delete genomes
                     del evaluated_genomes_by_species[sp]
                     species_ids.remove(sp)
+        if not killed:
+            return score_by_species
+        else:
+            # Recompute score_by_species
+            scores_by_species = {sp: [s for g, s in evaluated_genomes_by_species[sp]] for sp in species_ids}
+            return {sp: sum(scores_by_species[sp]) / len(scores_by_species[sp]) for sp in species_ids}
 
     def new_species_sizes(self, score_by_species):
         """
@@ -441,7 +452,7 @@ class Population:
             print()
 
         # Resize species, increase better scoring species and kill bad performing ones
-        self.species_death(evaluated_genomes_by_species)
+        score_by_species = self.species_death(evaluated_genomes_by_species, score_by_species)
         new_sizes = self.new_species_sizes(score_by_species)
 
         print("Breading new neural networks")

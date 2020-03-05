@@ -17,7 +17,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
     """
     k-Medoids clustering.
 
-    Based on the implementation from scikit-learn by
+    Partially based on the implementation from scikit-learn by
 
     Timo Erkkilä <timo.erkkila@gmail.com>
     Antti Lehmussola <antti.lehmussola@gmail.com>
@@ -72,7 +72,7 @@ class KMedoids(BaseEstimator, ClusterMixin, TransformerMixin):
 
     """
 
-    def __init__(self, n_clusters=8, metric="euclidean", max_iter=300, random_state=None, min_cluster_size=1):
+    def __init__(self, n_clusters=8, metric="euclidean", max_iter=500, random_state=None, min_cluster_size=1):
         self.n_clusters = n_clusters
         self.metric = metric
         self.max_iter = max_iter

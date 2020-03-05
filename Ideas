@@ -1,6 +1,7 @@
 Ideas:
 - preserve gene net parameters under mutation
 - cluster center in exploration
+- population score / auto end
 (?) restructure genomes for distance plot / dist to species repr
 (-) inter-gene crossover?
 - Train a bit everywhere. Top Species get extra compute time. Top Individuals of Species get more of that.
@@ -12,7 +13,11 @@ Ideas:
 (-) Mutation exception/variance
     Same for the selection of what genes to mutate
 - stride dial for Pooling
-(-) better structure seperate algorithm / initialization/ data
+(-) better structure separate algorithm / initialization/ data
+- Performance/ Score einstellbar
+
+Paper:
+- Analyse von learning rate etc / macht Evolution das richtige
 
 Todo:
 - Viele Testläufe um gute Werte zu finden für:

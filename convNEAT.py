@@ -5,111 +5,111 @@ import logging
 import os
 
 import torch
-import torchvision
 
 from population import Population
 from selection import cut_off_selection, tournament_selection, fitness_proportionate_selection,\
     fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling
-from crossover import crossover
 from net import train_on_data, evaluate
 from monitor import Monitor
 from exploration import show_genomes, from_human_readable
 
 
-def data_loader(torch_device):
-    # set up datasets
-    transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Lambda(
-            lambda x: x.to(device=torch_device)),
-        torchvision.transforms.Normalize((1 / 2,), (1 / 2,)),
-    ])
-    target_transform = torchvision.transforms.Lambda(
-        lambda x: torch.tensor(x, device=torch_device))
-    train_val = torchvision.datasets.MNIST(
-        'data', train=True, transform=transform,
-        target_transform=target_transform, download=True)
-    dataset_train, dataset_val = torch.utils.data.random_split(
-        train_val, [int(0.85 * len(train_val)), int(0.15 * len(train_val))])
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, batch_size=100, shuffle=True)
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val, batch_size=100, shuffle=True)
-    dataset_test = torchvision.datasets.MNIST(
-        'data', train=False, transform=transform,
-        target_transform=target_transform, download=True)
-    data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=100, shuffle=False)
+def data_loader(data, batch_size=100, validation_size=0.15):
+    """ Build data loaders """
+    val = int(validation_size * len(data))
+    data_train, data_val = torch.utils.data.random_split(data, [len(data) - val, val])
+    data_loader_train = torch.utils.data.DataLoader(data_train, batch_size=batch_size, shuffle=True)
+    data_loader_val = torch.utils.data.DataLoader(data_val, batch_size=batch_size, shuffle=True)
 
-    # peek in data to get the input_size
-    peek = next(iter(data_loader_train))
-    input_size = list(peek[0].shape[1:])
-    output_size = 10
-
-    return data_loader_test, data_loader_train, data_loader_val, input_size, output_size
+    return data_loader_train, data_loader_val
 
 
-def main():
-    # manually seed all random number generators for reproducible results
-    seed = 1
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.random.manual_seed(seed)
+class ConvNEAT:
 
-    torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    data_loader_test, data_loader_train, data_loader_val, input_size, output_size = data_loader(torch_device)
+    def __init__(self, output_size, n=100, torch_device='cpu', name=None, monitoring=True, seed=None, max_gens=50):
+        # manually seed all random number generators for reproducible results
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.random.manual_seed(seed)
 
-    # Load from checkpoint?
-    while True:
-        loading = input("load from checkpoint? [y/n]")
-        if loading == 'e':
-            show_genomes(input_size=input_size)
-            return
-        if loading == 'f':
-            from_human_readable(input_size=input_size, output_size=output_size,
-                                evaluate=functools.partial(
-                                    evaluate,
-                                    torch_device=torch_device,
-                                    data_loader_test=data_loader_val,
-                                    output_size=output_size
-                                ))
-            return
-        elif loading == 'n':
-            load = None
-            break
-        elif loading == 'y':
-            checkpoint = input("checkpoint name:")
-            generation = int(input("generation:"))
-            if not os.path.exists(os.path.join("checkpoints", checkpoint)):
-                print("This checkpoint doesn't exist")
-                continue
-            load = [checkpoint, generation]
-            break
+        self.n = n
+        self.output_size = output_size
+        self.torch_device = torch_device
+        self.monitoring = monitoring
+        self.name = name
+        self.max_gens = max_gens
 
-    print('\n\nInitializing population\n')
-    p = Population(n=20, name='memory_leak', elitism_rate=0.5, min_species_size=5, epochs=1, save_mode="elites",
-                   input_size=input_size, output_size=output_size, n_generations_no_change=3, tol=0, monitor=Monitor(),
-                   min_species=1,
-                   train=functools.partial(
-                       train_on_data,
-                       torch_device=torch_device,
-                       data_loader_train=data_loader_train
-                   ),
-                   evaluate=functools.partial(
-                       evaluate,
-                       torch_device=torch_device,
-                       data_loader_test=data_loader_val,
-                       output_size=output_size
-                   ),
-                   parent_selection=functools.partial(
-                       stochastic_universal_sampling,
-                       selection_percentage=0.3
-                   ),
-                   load=load)
-    for _ in range(50):
-        p.evolve()
+    def evolve(self, p):
+        for i in range(self.max_gens):
+            p.evolve()
+            # If Converged
+            if p.converged:
+                print("Training successful")
+                break
+            if i == self.max_gens - 1:
+                logging.warning("Further training could potentially increase performance.\n"
+                                "Consider increasing max_generations for a better result.")
 
+    def fit(self, data, load=None, **kwargs):
 
-if __name__ == '__main__':
-    logging.basicConfig(level='INFO')
-    main()
+        input_size = list(data[0][0].shape)
+        data_loader_train, data_loader_val = data_loader(data, **kwargs)
+
+        print('\n\nInitializing population\n')
+        p = Population(input_size=input_size, output_size=self.output_size, name=self.name, n=self.n,
+                       monitor=Monitor(),
+                       train=functools.partial(
+                           train_on_data,
+                           torch_device=self.torch_device,
+                           data_loader_train=data_loader_train
+                       ),
+                       evaluate=functools.partial(
+                           evaluate,
+                           torch_device=self.torch_device,
+                           data_loader_test=data_loader_val,
+                           output_size=self.output_size
+                       ),
+                       parent_selection=functools.partial(
+                           stochastic_universal_sampling,
+                           selection_percentage=0.3
+                       ),
+                       load=load)
+        self.evolve(p)
+
+    def prompt(self, data=None, **kwargs):
+        """
+        Prompt the user what to do.
+        Choices are loading a checkpoint, exploring checkpoints, starting evolution, etc
+        """
+
+        input_size = list(data[0][0].shape)
+
+        # Load from checkpoint?
+        while True:
+            loading = input("load from checkpoint? [y/n]")
+            if loading == 'e':
+                show_genomes(input_size=input_size)
+                return
+            if loading == 'f':
+                data_loader_train, data_loader_val = data_loader(data, **kwargs)
+                from_human_readable(input_size=input_size, output_size=self.output_size,
+                                    evaluate=functools.partial(
+                                        evaluate,
+                                        torch_device=self.torch_device,
+                                        data_loader_test=data_loader_val,
+                                        output_size=self.output_size
+                                    ))
+                return
+            elif loading == 'n':
+                load = None
+                break
+            elif loading == 'y':
+                checkpoint = input("checkpoint name:")
+                generation = int(input("generation:"))
+                if not os.path.exists(os.path.join("checkpoints", checkpoint)):
+                    print("This checkpoint doesn't exist")
+                    continue
+                load = [checkpoint, generation]
+                break
+        self.fit(data, load=load)
