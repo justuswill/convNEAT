@@ -87,7 +87,7 @@ def main():
             break
 
     print('\n\nInitializing population\n')
-    p = Population(n=20, name='debug_run_2', elitism_rate=0.5, min_species_size=5, epochs=1, save_mode="elites",
+    p = Population(n=20, name='memory_leak', elitism_rate=0.5, min_species_size=5, epochs=1, save_mode="elites",
                    input_size=input_size, output_size=output_size, n_generations_no_change=3, tol=0, monitor=Monitor(),
                    min_species=1,
                    train=functools.partial(

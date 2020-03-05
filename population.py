@@ -13,7 +13,7 @@ from KMedoids import KMedoids
 from genome import Genome
 from net import build_net_from_genome
 from crossover import crossover
-from tools import score_decay
+from tools import score_decay, check_cuda_memory
 
 
 class Population:
@@ -367,9 +367,12 @@ class Population:
                 logging.debug('Building Net')
                 try:
                     net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
+                    logging.info("Cuda Usage %d - before training" % len(check_cuda_memory()))
                     self.train(g, net, optim, criterion, epochs=self.epochs,
                                save_net_param=self.save_genomes >= 1, save_gene_param=self.save_genes)
+                    logging.info("Cuda Usage %d - after training" % len(check_cuda_memory()))
                     acc = self.evaluate(net)
+                    logging.info("Cuda Usage %d - after evaluation" % len(check_cuda_memory()))
                 except RuntimeError as e:
                     logging.info("Net failed to train:\n%s" % e)
                     acc = 0

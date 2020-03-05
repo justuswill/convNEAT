@@ -25,14 +25,19 @@ def score_decay(accuracy, training, decay_factor=0.01):
     return 1 - 10**(np.log10(1 - accuracy) + decay_factor * training)
 
 
-def check_cuda_memory(device="cuda"):
+def check_cuda_memory():
     """
     Compiles a list of allocated Torch Tensors on the device
     """
     tensor_list = []
     for obj in gc.get_objects():
         try:
-            if (torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data))) and obj.device == device:
-                tensor_list += [obj]
+            if torch.is_tensor(obj):
+                if obj.is_cuda:
+                    tensor_list += [obj]
+            elif hasattr(obj, 'data') and torch.is_tensor(obj.data):
+                if obj.data.is_cuda:
+                    tensor_list += [obj]
         except:
             pass
+    return tensor_list

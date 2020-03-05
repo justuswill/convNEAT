@@ -5,6 +5,7 @@ import torch
 
 from gene import KernelGene, PoolGene, DenseGene
 from optimizer import SGDGene, ADAMGene
+from tools import check_cuda_memory
 
 
 def build_net_from_genome(genome, input_size, output_size):
@@ -43,7 +44,8 @@ def build_net_from_genome(genome, input_size, output_size):
 
 
 def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_loader_train,
-                  n_epochs_no_change=3, tol=1e-5, save_net_param=True, save_gene_param=True):
+                  n_epochs_no_change=3, tol=1e-5, save_net_param=True, save_gene_param=True,
+                  move=True, move_back=False):
     """
     Train net
     Stop when in <n_epochs_no_change> no improvement by at least <tol> is made
@@ -51,15 +53,18 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
 
     Updates values in genomes that are relevant for this
     """
-    net = net.to(torch_device)
+    if move:
+        net.to(torch_device)
 
     print('Beginning training')
+
+    # 10 Sections of size n
+    n = len(data_loader_train) // 10
     nan_sections = 0
+
     for epoch in range(epochs):
         epoch_loss = 0.
         batch_loss = 0.
-        # 10 Sections
-        n = len(data_loader_train) // 10
         for i, (inputs, labels) in enumerate(data_loader_train):
             optimizer.zero_grad()
             outputs = net(inputs)
@@ -68,19 +73,26 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
             optimizer.step()
             epoch_loss += loss.item()
             batch_loss += loss.item()
+
+            # Print the section
             if (i + 1) % n == 0:
-                print('[{}, {:3}] loss: {:.3f}'.format(
-                    epoch, i + 1, batch_loss / n))
+                print('[%d, %3d] loss: %.3f' % (epoch, i + 1, batch_loss / n))
+                # Stop if only nans appear
                 if np.isnan(batch_loss / n):
                     nan_sections += 1
                     if nan_sections == 5:
                         # Quit without saving net parameters
+                        if move_back:
+                            net.to('cpu')
                         return
                 else:
                     nan_sections = 0
                 batch_loss = 0.
+
         epoch_loss_mean = epoch_loss / len(data_loader_train)
         print('[%d] loss: %.3f' % (epoch, epoch_loss_mean))
+
+        # Early stopping
         genome.trained += 1
         if epoch_loss_mean < genome.loss - tol:
             genome.loss = epoch_loss_mean
@@ -91,29 +103,35 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
                 # Get one epoch to improve next generation
                 genome.no_change -= 1
                 break
+
     print('Finished training')
+
+    if move_back:
+        net.to('cpu')
 
     # Save weights and bias for conv/pool
     if save_gene_param:
         for name, parameter in net.state_dict().items():
-            if name.startswith('conv') or name.startswith('pool_'):
+            if name.startswith('conv') or name.startswith('pool'):
                 _id = int(name.split('.')[0].split('_')[-1])
-                genome.genes_by_id[_id].net_parameters[name] = parameter.to('cpu')
+                genome.genes_by_id[_id].net_parameters[name] = parameter.cpu()
+
     # Save net
     if save_net_param:
-        genome.net_parameters = net.state_dict()
+        genome.net_parameters = net.state_dict().copy()
         # On CPU
-        for t in genome.net_parameters.values():
-            t.to('cpu')
+        for t in genome.net_parameters:
+            genome.net_parameters[t] = genome.net_parameters[t].cpu()
 
 
-def evaluate(net, torch_device, data_loader_test, output_size):
+def evaluate(net, torch_device, data_loader_test, output_size, move=False, move_back=True):
     """
     Instantiate the neural network from the genome and train it for a set amount of epochs
     Evaluate the accuracy on the test data and return this as the score.
     If a monitor is set, visualize the net that is currently training.
     """
-    net.to(torch_device)
+    if move:
+        net.to(torch_device)
 
     print('Beginning evaluation')
     confusion = np.zeros((output_size, output_size))
@@ -123,6 +141,9 @@ def evaluate(net, torch_device, data_loader_test, output_size):
             predictions = torch.argmax(outputs, dim=1)
             for pre, lab in zip(predictions, labels):
                 confusion[lab, pre] += 1
+
+    if move_back:
+        net.to('cpu')
 
     print(confusion)
     class_total = np.sum(confusion, axis=1)
