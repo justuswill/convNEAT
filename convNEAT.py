@@ -14,7 +14,7 @@ from monitor import Monitor
 from exploration import show_genomes, from_human_readable
 
 
-def data_loader(data, batch_size=100, validation_size=0.15):
+def data_loader(data, batch_size=100, validation_size=0.15, **kwargs):
     """ Build data loaders """
     val = int(validation_size * len(data))
     data_train, data_val = torch.utils.data.random_split(data, [len(data) - val, val])
@@ -62,7 +62,7 @@ class ConvNEAT:
 
         print('\n\nInitializing population\n')
         p = Population(input_size=input_size, output_size=self.output_size, name=self.name, n=self.n,
-                       monitor=Monitor(),
+                       monitor=Monitor() if self.monitoring else None, **kwargs,
                        train=functools.partial(
                            train_on_data,
                            torch_device=self.torch_device,
@@ -116,4 +116,4 @@ class ConvNEAT:
                     continue
                 load = [checkpoint, generation]
                 break
-        self.fit(data, load=load)
+        self.fit(data, load=load, **kwargs)

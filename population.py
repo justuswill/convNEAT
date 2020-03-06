@@ -470,6 +470,7 @@ class Population:
         print("Breading new neural networks")
         # Same mutations (split_edge) in a gen get the same innovation number
         this_gen_mutations = dict()
+        self.species = dict()
         for sp, evaluated_genomes in evaluated_genomes_by_species.items():
             # Save elites
             old_n_sp = len(evaluated_genomes)
