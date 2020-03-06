@@ -33,6 +33,10 @@ class ConvNEAT:
             np.random.seed(seed)
             torch.random.manual_seed(seed)
 
+            # Deterministic backend is slower, use only when needed
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
         self.n = n
         self.output_size = output_size
         self.torch_device = torch_device

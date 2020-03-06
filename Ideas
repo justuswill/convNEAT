@@ -1,3 +1,7 @@
+Bugs:
+- Elite saving goes nan
+(- when retraining an already trained generation, result is not reproducible by starting from beginning)
+
 Ideas:
 - preserve gene net parameters under mutation
 - cluster center in exploration

@@ -9,6 +9,8 @@ import numpy as np
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 
+import torch
+
 from KMedoids import KMedoids
 from genome import Genome
 from net import build_net_from_genome
@@ -111,6 +113,7 @@ class Population:
     def save_checkpoint(self):
         save = [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
                 self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
+                (random.getstate(), np.random.get_state(), torch.get_rng_state()),
                 (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
@@ -127,7 +130,10 @@ class Population:
         with open(file_path, "rb") as c:
             [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
              self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
-             saved_best_genome, saved_genomes] = pickle.load(c)
+             saved_random_state, saved_best_genome, saved_genomes] = pickle.load(c)
+            random.setstate(saved_random_state[0])
+            np.random.set_state(saved_random_state[1])
+            torch.set_rng_state(saved_random_state[2])
             self.best_genome = saved_best_genome[0](self).load(saved_best_genome[1], load_params=load_params)
             self.species = {species: [genome[0](self).load(genome[1], load_params=load_params) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
@@ -419,6 +425,10 @@ class Population:
                 self.monitor.plot(2, p, kind='add_collection')
         return [evaluated_genomes_by_species, score_by_species, acc_by_species]
 
+    def rewards(self):
+        """ The best performing nets get extra time to train so that faster progress can be made """
+        pass
+
     def evolve(self):
         """
         Group the genomes to species and evaluate them on training data
@@ -455,6 +465,8 @@ class Population:
         score_by_species = self.species_death(evaluated_genomes_by_species, score_by_species)
         new_sizes = self.new_species_sizes(score_by_species)
 
+        self.rewards()
+
         print("Breading new neural networks")
         # Same mutations (split_edge) in a gen get the same innovation number
         this_gen_mutations = dict()
@@ -478,5 +490,8 @@ class Population:
             parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
             new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
+
+        if len([g for sp, genomes in self.species.items() for g in genomes]) != self.n:
+            logging.error("Error occured in evolution step")
 
         self.generation += 1

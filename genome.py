@@ -22,7 +22,7 @@ class Genome:
     """
 
     def __init__(self, population, optimizer=None, nodes_and_genes=None, nodes=None, genes=None, trained=0, reward=0,
-                 net_parameters=None, loss=float('inf'), no_change=0):
+                 acc=None, net_parameters=None, loss=float('inf'), no_change=0):
         self.population = population
         self.optimizer = optimizer or self.init_optimizer()
 
@@ -32,7 +32,7 @@ class Genome:
 
         # These are set after training. For checkpointing and to be used by elite genomes
         self.net_parameters = net_parameters
-        self.acc = None
+        self.acc = acc
 
         # Early stopping etc.
         self.loss = loss
@@ -281,7 +281,7 @@ class Genome:
                       nodes_and_genes=[[node.copy() for node in self.nodes],
                                        [gene.copy() for gene in self.genes]],
                       net_parameters=self.net_parameters.copy() if self.net_parameters is not None else None,
-                      no_change=self.no_change, loss=self.loss,  trained=self.trained,)
+                      no_change=self.no_change, loss=self.loss, trained=self.trained, acc=self.acc)
 
     def dissimilarity(self, other, c=(5, 5, 5, 2, 5, 1)):
         """

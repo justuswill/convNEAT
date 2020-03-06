@@ -130,10 +130,10 @@ def show_genomes(input_size, simultan=False):
         fig, axs = plt.subplots(len(p.species), show, squeeze=False, figsize=(20, 10))
         fig.canvas.set_window_title('Generation %d' % i)
         for j, sp in enumerate(sorted(p.species.keys(), key=lambda x: p.history[-1][x][1] or 0, reverse=True)):
-            for k, g in enumerate(sorted(p.species[sp], key=lambda x: x.score or 0, reverse=True)[:show]):
+            for k, g in enumerate(sorted(p.species[sp], key=lambda x: x.acc or 0, reverse=True)[:show]):
                 g.visualize(ax=axs[j, k], input_size=input_size)
                 axs[j, k].title.set_text('%sacc: %s %%' % ("Species %d " % sp if k == 0 else "",
-                                                           "%.2f" % (100 * g.score) if g.score is not None else "-"))
+                                                           "%.2f" % (100 * g.acc) if g.acc is not None else "-"))
         if simultan:
             plt.pause(0.01)
         else:

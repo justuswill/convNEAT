@@ -29,6 +29,6 @@ if __name__ == '__main__':
     torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     data_train, data_test = mnist(torch_device)
 
-    trainer = ConvNEAT(output_size=10, n=20, torch_device=torch_device, name='debug_run_3', seed=1)
-    trainer.prompt(data_train, save_mode="elites", elitism_rate=0.5, min_species_size=5, epochs=1,
+    trainer = ConvNEAT(output_size=10, n=10, torch_device=torch_device, name='save_test', seed=5)
+    trainer.prompt(data_train, save_mode="elites", elitism_rate=0.3, min_species_size=5, epochs=5,
                    n_generations_no_change=3, tol=0, min_species=1)
