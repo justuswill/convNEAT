@@ -445,17 +445,16 @@ class Population:
         Group the genomes to species and evaluate them on training data
         Generate the next generation with selection, crossover and mutation
         """
+        # Saving checkpoint
+        print("Saving checkpoint\n")
+        self.save_checkpoint()
+
         # show best net
         if self.monitor is not None:
             self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save(parameters=False)), kind='net-plot',
                               input_size=self.input_size, acc=self.top_acc, title='best', clear=True, show=True)
 
         self.cluster()
-
-        # Saving checkpoint
-        print("Saving checkpoint\n")
-        self.save_checkpoint()
-
         evaluated_genomes_by_species, score_by_species, acc_by_species = self.train_nets()
 
         # Saving checkpoint with net parameters

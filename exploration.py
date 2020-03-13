@@ -105,10 +105,10 @@ def from_human_readable(evaluate, input_size, output_size):
                 if "Genome" in line:
                     genome = decode(line)
                     fig, ax = plt.subplots()
-                    net, _, _ = build_net_from_genome(genome, input_size, output_size)
                     genome.visualize(ax=ax, input_size=(1, 28, 28))
-                    evaluate(net)
                     plt.show()
+                    net, _, _ = build_net_from_genome(genome, input_size, output_size)
+                    evaluate(net)
         return
 
 
