@@ -156,9 +156,11 @@ def evaluate(net, torch_device, data_loader_test, output_size, move=False, move_
     # Ignore Warning if /0
     np.seterr(divide='ignore', invalid='ignore')
     for i in range(output_size):
-        print('%d: Recall: %5.2f %%  (%3d / %3d) - Precision %5.2f %% (%3d / %3d)' %
-              (i, 100 * class_correct[i] / class_total[i], class_correct[i], class_total[i],
-               100 * class_correct[i] / labeled_total[i], class_correct[i], labeled_total[i]))
+        rec = class_correct[i] / class_total[i]
+        pre = class_correct[i] / labeled_total[i]
+        print('%d: Recall: %5.2f %%  (%3d / %3d) - Precision %5.2f %% (%3d / %3d)- F1: %.3f' %
+              (i, 100 * rec, class_correct[i], class_total[i],
+               100 * pre, class_correct[i], labeled_total[i], 100 / (1 / pre + 1 / rec)))
     print('Accuracy of the network on the %d validation images: %5.2f %% (%d / %d)' % (total, 100 * acc, correct, total))
     print()
     np.seterr(divide='warn', invalid='warn')

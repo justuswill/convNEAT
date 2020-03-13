@@ -110,10 +110,14 @@ class Population:
     def next_id(self):
         return next(self.id_generator)
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, update=False):
+        if not update:
+            # Save for the update save later
+            self.this_gen_random_state = (random.getstate(), np.random.get_state(), torch.get_rng_state())
+
         save = [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
                 self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
-                (random.getstate(), np.random.get_state(), torch.get_rng_state()),
+                self.this_gen_random_state,
                 (self.best_genome.__class__, self.best_genome.save()),
                 {species: [(genome.__class__, genome.save()) for genome in genomes]
                  for species, genomes in self.species.items()}]
@@ -198,7 +202,7 @@ class Population:
             sorted_species_ids += [new_species]
             species_ids += [new_species]
         while k - 1 in ids_to_check and (scores[k] < threshold * self.n or scores[k-1] < rel_threshold[0] * scores[k]):
-            print("number of clusters increased by one")
+            print("number of clusters decreased by one")
             k -= 1
 
         # Save new Clustering
@@ -214,8 +218,13 @@ class Population:
             self.species[labels[i]] += [g]
 
         # Save to history starting with newest
-        self.history += [{species: [len(genomes), None]
-                          for species, genomes in sorted(self.species.items(), key=lambda x: x[0], reverse=True)}]
+        entry = {species: [len(genomes), None]
+                 for species, genomes in sorted(self.species.items(), key=lambda x: x[0], reverse=True)}
+        if len(self.history) >= self.generation:
+            # Compatible with laoded data
+            self.history[self.generation - 1] = entry
+        else:
+            self.history += [entry]
 
         if self.monitor is not None:
             self.distance_plot(labels, distances)
@@ -329,6 +338,8 @@ class Population:
                     # Delete genomes
                     del evaluated_genomes_by_species[sp]
                     species_ids.remove(sp)
+
+                    print("Species %d killed due to low performance" % sp)
         if not killed:
             return score_by_species
         else:
@@ -434,21 +445,22 @@ class Population:
         Group the genomes to species and evaluate them on training data
         Generate the next generation with selection, crossover and mutation
         """
-        # Saving checkpoint
-        print("Saving checkpoint\n")
-        self.save_checkpoint()
-
         # show best net
         if self.monitor is not None:
             self.monitor.plot(0, (self.best_genome.__class__, self.best_genome.save(parameters=False)), kind='net-plot',
                               input_size=self.input_size, acc=self.top_acc, title='best', clear=True, show=True)
 
         self.cluster()
+
+        # Saving checkpoint
+        print("Saving checkpoint\n")
+        self.save_checkpoint()
+
         evaluated_genomes_by_species, score_by_species, acc_by_species = self.train_nets()
 
         # Saving checkpoint with net parameters
         print("Saving checkpoint after training\n")
-        self.save_checkpoint()
+        self.save_checkpoint(update=True)
 
         print('\n\nGENERATION %d\n' % self.generation)
         for species, evaluated_genomes in evaluated_genomes_by_species.items():
@@ -492,7 +504,10 @@ class Population:
             new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations) for p in parents]
             self.species[sp] = elite_genomes + new_genomes
 
-        if len([g for sp, genomes in self.species.items() for g in genomes]) != self.n:
+        x = len([g for sp, genomes in self.species.items() for g in genomes])
+        if x != self.n:
+            print("Error")
+            print()
             logging.error("Error occured in evolution step")
 
         self.generation += 1

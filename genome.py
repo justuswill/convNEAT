@@ -92,10 +92,13 @@ class Genome:
                  Gene(4, 1, 2, mutate_to=[[KernelGene, DenseGene], [0, 1]]).mutate_random()]]
 
     def init_optimizer(self):
-        return weighted_choice([SGDGene, ADAMGene], [0.5, 0.5])()
+        return weighted_choice([SGDGene, ADAMGene], [0.15, 0.85])()
 
     def mutate_optimizer(self):
         self.optimizer = self.optimizer.mutate_random()
+
+    def mutate_change_optimizer(self):
+        self.optimizer = ADAMGene() if isinstance(self.optimizer, SGDGene) else SGDGene()
 
     def mutate_genes(self, p):
         mutate = np.random.rand(len(self.genes)) < p
@@ -188,10 +191,10 @@ class Genome:
 
     def mutate_random(self, this_gen_mutations):
         mutations = random_choices((lambda: self.mutate_genes(0.5), lambda: self.mutate_nodes(0.2),
-                                    self.mutate_optimizer, self.mutate_disable_edge, self.enable_edge,
-                                    lambda x=this_gen_mutations: self.split_edge(this_gen_mutations=this_gen_mutations),
-                                    self.add_edge),
-                                   (1, 1, 1, 0.1, 0.1, 0.7, 0.3))
+                                    self.mutate_optimizer, self.mutate_change_optimizer, self.mutate_disable_edge,
+                                    self.enable_edge, self.add_edge,
+                                    lambda: self.split_edge(this_gen_mutations=this_gen_mutations)),
+                                   (1, 1, 1, 0.1, 0.1, 0.1, 0.3, 0.3))
         for mutate in mutations:
             mutate()
         return self
