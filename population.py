@@ -43,7 +43,7 @@ class Population:
 
     def __init__(self, n, input_size, output_size, evaluate, parent_selection, train, cross_over=crossover,
                  name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
-                 min_species=1, max_species=10, epochs=2, load=None, save_mode="elites", monitor=None,
+                 min_species=1, max_species=10, epochs=2, reward_epochs=10, load=None, save_mode="elites", monitor=None,
                  load_params=True):
         # Evolution parameters
         self.evaluate = evaluate
@@ -51,6 +51,7 @@ class Population:
         self.crossover = cross_over
         self.train = train
         self.epochs = epochs
+        self.reward_epochs = reward_epochs
         self.min_species_size = min_species_size
         self.min_species = min_species
         self.max_species = max_species
@@ -80,9 +81,8 @@ class Population:
             self.input_size = input_size
             self.output_size = output_size
 
-            # Begin with only one species
+            # Begin with min species of nearly same size
             self.n = n
-            self.number_of_species = min_species
             self.species = {i: [Genome(self) for _ in range(n // min_species if i > 0
                                                             else (n // min_species) + (n % min_species))]
                             for i in range(min_species)}
@@ -112,10 +112,10 @@ class Population:
 
     def save_checkpoint(self, update=False):
         if not update:
-            # Save for the update save later
+            # Remember the random state of the start or reproducibility
             self.this_gen_random_state = (random.getstate(), np.random.get_state(), torch.get_rng_state())
 
-        save = [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
+        save = [self.n, self.id_generator, self.species_id_generator, self.generation,
                 self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
                 self.this_gen_random_state,
                 (self.best_genome.__class__, self.best_genome.save()),
@@ -132,7 +132,7 @@ class Population:
     def load_checkpoint(self, checkpoint_name, generation, load_params=True):
         file_path = os.path.join('checkpoints', checkpoint_name, "%02d.cp" % generation)
         with open(file_path, "rb") as c:
-            [self.n, self.id_generator, self.species_id_generator, self.number_of_species, self.generation,
+            [self.n, self.id_generator, self.species_id_generator, self.generation,
              self.input_size, self.output_size, self.checkpoint_name, self.top_acc, self.history,
              saved_random_state, saved_best_genome, saved_genomes] = pickle.load(c)
             random.setstate(saved_random_state[0])
@@ -155,7 +155,7 @@ class Population:
         the number of cluster decreases if the score of k-1 is < <rel_threshold[0]> % of k score
         the number of cluster increases if the score of k+1 is < <rel_threshold[1]> % of k score
         """
-        k = self.number_of_species
+        k = len(self.species)
         n = self.n
 
         # Sorted by size
@@ -205,8 +205,6 @@ class Population:
             print("number of clusters decreased by one")
             k -= 1
 
-        # Save new Clustering
-        self.number_of_species = k
         # Use old identifiers for clusters
         labels = [sorted_species_ids[i] for i in all_labels[k]]
         self.species_repr = {sp: all_genomes[center]
@@ -396,8 +394,9 @@ class Population:
                 try:
                     net, optim, criterion = build_net_from_genome(g, self.input_size, self.output_size)
                     logging.info("Cuda Usage %d - before training" % len(check_cuda_memory()))
-                    self.train(g, net, optim, criterion, epochs=self.epochs,
+                    self.train(g, net, optim, criterion, epochs=self.epochs + g.reward,
                                save_net_param=self.save_genomes >= 1, save_gene_param=self.save_genes)
+                    g.reward = 0
                     logging.info("Cuda Usage %d - after training" % len(check_cuda_memory()))
                     acc = self.evaluate(net)
                     logging.info("Cuda Usage %d - after evaluation" % len(check_cuda_memory()))
@@ -436,9 +435,20 @@ class Population:
                 self.monitor.plot(2, p, kind='add_collection')
         return [evaluated_genomes_by_species, score_by_species, acc_by_species]
 
-    def rewards(self):
-        """ The best performing nets get extra time to train so that faster progress can be made """
-        pass
+    def rewards(self, evaluated_genomes_by_species, score_by_species):
+        """
+        The best performing nets get extra time to train so that faster progress can be made
+        Epochs are awarded proportionate to species score and ranked to genomes
+        """
+        # Can be rounded to < reward_epochs
+        rewards_by_species = {sp: int(self.reward_epochs * score/sum(score_by_species.values()))
+                              for sp, score in score_by_species.items()}
+        for sp, reward in rewards_by_species.items():
+            for g, s in evaluated_genomes_by_species[sp]:
+                g.reward = reward // 2
+                reward -= reward // 2
+                if reward <= 0:
+                    break
 
     def evolve(self):
         """
@@ -476,7 +486,7 @@ class Population:
         score_by_species = self.species_death(evaluated_genomes_by_species, score_by_species)
         new_sizes = self.new_species_sizes(score_by_species)
 
-        self.rewards()
+        self.rewards(evaluated_genomes_by_species, score_by_species)
 
         print("Breading new neural networks")
         # Same mutations (split_edge) in a gen get the same innovation number

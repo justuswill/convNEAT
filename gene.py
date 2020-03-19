@@ -409,8 +409,8 @@ class DenseGene(Gene):
 
     def output_size(self, in_size):
         # force out_depth > 0
-        if in_size[0] + self.size_change <= 0:
-            self.size_change = 1 - in_size[0]
+        if in_size[2] + self.size_change <= 0:
+            self.size_change = 1 - in_size[2]
             self.net_parameters = dict()
             logging.debug('Mutateted size_change on gene %d' % self.id)
 

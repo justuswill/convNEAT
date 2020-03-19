@@ -54,7 +54,7 @@ class Genome:
         saved = [(self.optimizer.__class__, self.optimizer.save()),
                  [(node.__class__, node.id, node.depth, node.save()) for node in self.nodes],
                  [(g.__class__, g.id, g.id_in, g.id_out, g.save()) for g in self.genes],
-                 self.acc, self.loss, self.trained, self.no_change]
+                 self.acc, self.loss, self.trained, self.no_change, self.reward]
         if parameters:
             saved += [self.net_parameters]
         return saved
@@ -63,11 +63,12 @@ class Genome:
         # Legacy
         if len(save) == 5:
             [saved_optimizer, saved_nodes, saved_genes, self.acc, self.net_parameters] = save
-        elif len(save) == 8:
-            [saved_optimizer, saved_nodes, saved_genes, self.acc, self.loss, self.trained, self.no_change,
+        elif len(save) == 9:
+            [saved_optimizer, saved_nodes, saved_genes, self.acc, self.loss, self.trained, self.no_change, self.reward,
              self.net_parameters] = save
         else:
-            saved_optimizer, saved_nodes, saved_genes, self.acc, self.loss, self.trained, self.no_change = save
+            [saved_optimizer, saved_nodes, saved_genes,
+             self.acc, self.loss, self.trained, self.no_change, self.reward] = save
             self.net_parameters = None
         if not load_params and self.net_parameters is not None:
             self.net_parameters = None
