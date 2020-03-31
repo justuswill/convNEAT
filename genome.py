@@ -108,10 +108,10 @@ class Genome:
                 self.genes[i] = gene.mutate_random(exception)
 
     def mutate_nodes(self, p, exception):
-        mutate = np.random.rand(len(self.nodes)) < p
+        mutate = np.random.rand(len(self.nodes)) < p * exception
         for i, node in enumerate(self.nodes):
             if mutate[i]:
-                node.mutate_random(exception)
+                node.mutate_random()
 
     def dfs(self, id_s, id_t, pre=None):
         # depth first search in feed-forward net
