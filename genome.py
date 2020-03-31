@@ -101,17 +101,17 @@ class Genome:
     def mutate_change_optimizer(self):
         self.optimizer = ADAMGene() if isinstance(self.optimizer, SGDGene) else SGDGene()
 
-    def mutate_genes(self, p):
+    def mutate_genes(self, p, exception):
         mutate = np.random.rand(len(self.genes)) < p
         for i, gene in enumerate(self.genes):
             if mutate[i]:
-                self.genes[i] = gene.mutate_random()
+                self.genes[i] = gene.mutate_random(exception)
 
-    def mutate_nodes(self, p):
+    def mutate_nodes(self, p, exception):
         mutate = np.random.rand(len(self.nodes)) < p
         for i, node in enumerate(self.nodes):
             if mutate[i]:
-                node.mutate_random()
+                node.mutate_random(exception)
 
     def dfs(self, id_s, id_t, pre=None):
         # depth first search in feed-forward net
@@ -190,12 +190,14 @@ class Genome:
                 self.genes_by_id[id] = new_edge
                 break
 
-    def mutate_random(self, this_gen_mutations):
-        mutations = random_choices((lambda: self.mutate_genes(0.5), lambda: self.mutate_nodes(0.2),
+    def mutate_random(self, this_gen_mutations, exception=0.2):
+        weights = [1, 1] + list(map(lambda x: x * exception, [1, 0.1, 0.1, 0.1, 0.4, 0.4]))
+        mutations = random_choices((lambda: self.mutate_genes(0.5, exception),
+                                    lambda: self.mutate_nodes(0.2, exception),
                                     self.mutate_optimizer, self.mutate_change_optimizer, self.mutate_disable_edge,
                                     self.enable_edge, self.add_edge,
                                     lambda: self.split_edge(this_gen_mutations=this_gen_mutations)),
-                                   (1, 1, 1, 0.1, 0.1, 0.1, 0.3, 0.3))
+                                   weights)
         for mutate in mutations:
             mutate()
         return self

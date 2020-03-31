@@ -41,7 +41,7 @@ class Gene:
         return [[KernelGene, DenseGene], [1, 1]]
 
     # A mutation is decided to happen. Returns itself.
-    def mutate_random(self):
+    def mutate_random(self, exception=1):
         return weighted_choice(*self.mutate_to)(self.id, self.id_in, self.id_out)
 
     def output_size(self, input_size):
@@ -157,11 +157,12 @@ class KernelGene(Gene):
         self.depth_mult = max(1, self.depth_mult + random.choice([-2, -1, 1, 2]))
         self.net_parameters = dict()
 
-    def mutate_random(self):
+    def mutate_random(self, exception=1):
+        weights = list(map(lambda x: x * exception, [0.1, 0.1, 0.2, 0.3, 0.2, 0.3, 0.1]))
         mutations = random_choices((self.mutate_width, self.mutate_height, self.mutate_size,
                                     self.mutate_stride, self.mutate_padding,
                                     self.mutate_depth_size_change, self.mutate_depth_mult),
-                                   (0.1, 0.1, 0.2, 0.3, 0.2, 0.3, 0.1))
+                                   weights)
         for mutate in mutations:
             mutate()
         return self
@@ -302,10 +303,11 @@ class PoolGene(Gene):
         # force padding <= half of kernel size
         self.padding = max(0, min(self.width//2, self.height//2, self.padding + random.choice([-2, -1, 1, 2])))
 
-    def mutate_random(self):
+    def mutate_random(self, exception=1):
+        weights = list(map(lambda x: x * exception, [0.4, 0.2, 0.2, 0.5, 0.2, 0.2]))
         mutations = random_choices((self.mutate_pooling, self.mutate_width, self.mutate_height, self.mutate_size,
                                     self.mutate_stride, self.mutate_padding),
-                                   (0.4, 0.2, 0.2, 0.5, 0.2, 0.2))
+                                   weights)
         for mutate in mutations:
             mutate()
         return self
@@ -400,9 +402,9 @@ class DenseGene(Gene):
     def mutate_activation(self):
         self.activation = random.choice([x for x in self.possible_activations if x != self.activation])
 
-    def mutate_random(self):
+    def mutate_random(self, exception=1):
         mutations = random_choices((self.mutate_size_change, self.mutate_activation),
-                                   (1, 0.2))
+                                   (1 * exception, 0.2 * exception))
         for mutate in mutations:
             mutate()
         return self

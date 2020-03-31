@@ -43,8 +43,8 @@ class Population:
 
     def __init__(self, n, input_size, output_size, evaluate, parent_selection, train, cross_over=crossover,
                  name=None, elitism_rate=0.1, min_species_size=5, n_generations_no_change=5, tol=1e-5,
-                 min_species=1, max_species=10, epochs=2, reward_epochs=10, load=None, save_mode="elites", monitor=None,
-                 load_params=True):
+                 mutate_speed=1, min_species=1, max_species=10, epochs=2, reward_epochs=10,
+                 load=None, save_mode="elites", monitor=None, load_params=True):
         # Evolution parameters
         self.evaluate = evaluate
         self.parent_selection = parent_selection
@@ -56,6 +56,7 @@ class Population:
         self.min_species = min_species
         self.max_species = max_species
         self.elitism_rate = elitism_rate
+        self.mutate_speed = mutate_speed
         self.n_generations_no_change = n_generations_no_change
         self.tol = tol
 
@@ -510,7 +511,8 @@ class Population:
 
             # Selection & Crossover & Mutation
             parents = self.parent_selection(evaluated_genomes, k=new_n_sp-elitism)
-            new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations) for p in parents]
+            new_genomes = [self.crossover(p[0], p[1]).mutate_random(this_gen_mutations, exception=self.mutate_speed)
+                           for p in parents]
             self.species[sp] = elite_genomes + new_genomes
 
         x = len([g for sp, genomes in self.species.items() for g in genomes])
