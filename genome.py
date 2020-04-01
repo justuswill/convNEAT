@@ -159,11 +159,12 @@ class Genome:
 
             # Save innovation numbers
             if edge.id not in this_gen_mutations:
-                this_gen_mutations[edge.id] = [f() for f in [self.next_id]*3]
-            [id1, id2, id3] = this_gen_mutations[edge.id]
+                depth = min(d2-(d2-d1)/10, max(d1+(d2-d1)/10, random.normalvariate((d1 + d2) / 2, 0.01)))
+                this_gen_mutations[edge.id] = [f() for f in [self.next_id]*3] + [depth]
+            [id1, id2, id3, depth] = this_gen_mutations[edge.id]
 
             # Guarantee d1<dn<d2 and no duplicates with cut-off normalvariate
-            new_node = Node(id1, min(d2+(d1+d2)/10, max(d1-(d1+d2)/10, random.normalvariate((d1 + d2) / 2, 0.01))))
+            new_node = Node(id1, depth)
             new_edge_1 = edge.copy(id2, edge.id_in, new_node.id)
             new_edge_2 = edge.add_after(id3, new_node.id, edge.id_out)
             edge.enabled = False
