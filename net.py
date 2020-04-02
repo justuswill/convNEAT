@@ -2,6 +2,7 @@ import logging
 import math
 import numpy as np
 import torch
+from pprint import pprint
 
 from gene import KernelGene, PoolGene, DenseGene
 from optimizer import SGDGene, ADAMGene
@@ -37,6 +38,9 @@ def build_net_from_genome(genome, input_size, output_size):
     elif type(opt) == ADAMGene:
         optimizer = torch.optim.Adam(net.parameters(), lr=2 ** opt.log_learning_rate,
                                      weight_decay=2 ** opt.log_weight_decay)
+        # Load state from gene
+        if opt.parameters is not None:
+            optimizer.load_state_dict(opt.parameters)
     else:
         raise ValueError('Optimizer %s not supported' % type(genome.optimizer))
 
@@ -108,6 +112,7 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
 
     if move_back:
         net.to('cpu')
+        optimizer.to('cpu')
 
     # Save weights and bias for conv/pool
     if save_gene_param:
@@ -118,6 +123,9 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
 
     # Save net
     if save_net_param:
+        # Save opt params
+        if type(genome.optimizer) == ADAMGene:
+            genome.optimizer.parameters = optimizer.state_dict().copy()
         genome.net_parameters = net.state_dict().copy()
         # On CPU
         for t in genome.net_parameters:

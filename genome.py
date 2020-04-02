@@ -290,7 +290,7 @@ class Genome:
                       net_parameters=self.net_parameters.copy() if self.net_parameters is not None else None,
                       no_change=self.no_change, loss=self.loss, trained=self.trained, acc=self.acc)
 
-    def dissimilarity(self, other, c=(5, 5, 5, 2, 5, 1)):
+    def dissimilarity(self, other, c=(5, 5, 5, 1, 5, 1)):
         """
         The distance/dissimilarity of two genomes, similar to NEAT
         dist = (c0*S + c1*D + c2*E)/N + c3*T + c4*K + c5*X

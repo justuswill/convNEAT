@@ -95,9 +95,10 @@ class ADAMGene(_Optimizer):
     Adam algorithm for adaptive gradient descent
     """
 
-    def __init__(self, log_learning_rate=None, momentum=None, log_weight_decay=None, dampening=None):
+    def __init__(self, log_learning_rate=None, log_weight_decay=None, parameters=None):
         self.log_learning_rate = log_learning_rate if log_learning_rate is not None else self.init_log_learning_rate()
         self.log_weight_decay = log_weight_decay if log_weight_decay is not None else self.init_log_weight_decay()
+        self.parameters = parameters
 
     def __repr__(self):
         r = super().__repr__()
@@ -105,10 +106,10 @@ class ADAMGene(_Optimizer):
                 (self.log_learning_rate, self.log_weight_decay) + r[-1:])
 
     def save(self):
-        return [self.log_learning_rate, self.log_weight_decay]
+        return [self.log_learning_rate, self.log_weight_decay, self.parameters]
 
     def load(self, save):
-        self.log_learning_rate, self.log_weight_decay = save
+        self.log_learning_rate, self.log_weight_decay, self.parameters = save
         return self
 
     def init_log_learning_rate(self):
@@ -131,7 +132,8 @@ class ADAMGene(_Optimizer):
         return self
 
     def copy(self):
-        return SGDGene(log_learning_rate=self.log_learning_rate, log_weight_decay=self.log_weight_decay)
+        return ADAMGene(log_learning_rate=self.log_learning_rate, log_weight_decay=self.log_weight_decay,
+                        parameters=self.parameters.copy() if self.parameters is not None else None)
 
     def dissimilarity(self, other):
         if type(other) != ADAMGene:

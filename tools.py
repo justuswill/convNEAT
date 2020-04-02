@@ -21,8 +21,9 @@ def limited_growth(t, cap, relevance):
 def score_decay(accuracy, training, decay_factor=0.01):
     """
     With increasing training linearly increase the log error [log(10, 1-acc)] on the data
+    Always > 0
     """
-    return 1 - 10**(np.log10(1 - accuracy) + decay_factor * training)
+    return max(1e-5, 1 - 10**(np.log10(1 - accuracy) + decay_factor * training))
 
 
 def check_cuda_memory():
