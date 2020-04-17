@@ -126,11 +126,13 @@ def train_on_data(genome, net, optimizer, criterion, epochs, torch_device, data_
         # Save opt params
         if type(genome.optimizer) == ADAMGene:
             genome.optimizer.parameters = optimizer.state_dict().copy()
+            print(genome.optimizer.parameters)
             # On CPU
             for state in [v for v in genome.optimizer.parameters.values() if type(v) == dict]:
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
                         state[k] = state[k].cpu()
+            print(genome.optimizer.parameters)
         genome.net_parameters = net.state_dict().copy()
         # On CPU
         for t in genome.net_parameters:
