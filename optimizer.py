@@ -131,9 +131,9 @@ class ADAMGene(_Optimizer):
             mutate()
         return self
 
-    def copy(self):
+    def copy(self, copy_parameters=True):
         return ADAMGene(log_learning_rate=self.log_learning_rate, log_weight_decay=self.log_weight_decay,
-                        parameters=self.parameters.copy() if self.parameters is not None else None)
+                        parameters=self.parameters.copy() if self.parameters is not None and copy_parameters else None)
 
     def dissimilarity(self, other):
         if type(other) != ADAMGene:
