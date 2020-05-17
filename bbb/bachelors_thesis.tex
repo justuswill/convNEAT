@@ -561,6 +561,59 @@
 
 				% Abbild Clusterung von Netzen
 
+		\subsection{Eliten und Training}
+			
+			Damit die Netze in der Population überhaupt gute Vorhersagen auf den Validierungsdaten machen können müssen sie auf den Trainingsdaten trainieren, dies geschieht in einer Trainingsphase.
+			In dieser Phase kann jedes Netz eine feste Anzahl von Epochen auf den Daten trainieren. Die große Laufzeit des Algorithmuses ist auf diesen Schritt zurückzuführen, denn 
+			wie bei der Arbeit mit neuronalen Netzen üblich, kann das Training sehr lange, manchmal Stunden oder Tage lang dauern.
+
+			Netze die schnellen Fortschritt machen werden belohnt in dem Sie länger trainieren können. Dies sorgt dafür, dass insgesamt schnellerer Fortschritt gemacht wird.
+			Besonders bei kompliziertern Problemen ist aber nicht klar, dass die festgelegte Anzahl an Epochen ausreicht um ein gutes Netz zu trainieren.
+			Je nach Hyperparameterwahl dauert es eventuell viel länger. Die Netze hätten so überhaupt keine Zeit gut genug zu werden, um das Problem lösen zu können.
+
+			Abhilfe schaffen die sogenannten \textit{Eliten}. Nach jeder Generation werden die besten Netze jedes Clusters automatisch in die nächsten Generation übernommen.
+			Nur der verbleibende Platz in der Population wird durch den Crossover aufgefüllt.
+
+			Das hat den Vorteil, das die besten Netze die Möglichkeit haben über mehrere Generation so lange zu trainieren wie sie brauchen um ihr Potenzial auszuschöpfen.
+			Andererseits sorgt der angepasste score in \ref{select} dafür, dass Netze die schon länger trainiert haben, nicht bevorzugt werden und auch neue Netze noch die Chance haben
+			sich zu etablieren.
+	
+	\section{Ergebnisse}\label{ergeb}
+		
+		Der entwickelte Algorithmus wurde in \textit{Python} implementiert und verwendet die Bibliothek \textit{PyTorch} um die Netze zu trainieren.
+		Das Entwickelte Modul lässt sich sehr einfach ausführen, der Einzige Input ist der Datensatz. 
+		Alle Hyperparameter wie die Anzahl der Genome in der Population kann eingestellt werden, aber auch die Standardwerte funktionieren für die meisten Probleme.
+		\textit{convNEAT} besitzt eine optionalle grafische Oberfläche, die den aktuellen Fortschritt anzeigt und eine noch detailierte Ausgabe im Terminal.
+		Nach jeder Generation werden die besten Netze abgespeichert und es kann das Training unterbrochen und fortgesetzt werden.
+
+		Augrund der Tatsache, dass \textit{convNEAT} eine sehr große Laufzeit hat und sehr viele Testläufe gemacht werden müssen um die Hyperparameter einzustellen, blieb nicht mehr genug Zeit
+		\textit{convNEAT} auf verschiedenen Datensätzen zu testen um die Vielseitigkeit von \textit{convNEAT} demonstrieren zu können.
+		Es wurden aber einige Tests auf dem (leider etwas limitierten) MNIST Datensatz durchgeführt:
+
+		\subsection{MNIST}
+			
+			Auf den Standardeinstellung erzeugt \textit{convNEAT} reltativ schnell Netze mit einer Accuracy von über $98$ und erfüllt damit die Ansprüche die wir an
+			den Algortihmus gestellt haben, automatisch ein passables Ergebnis zu erreichen.
+			In den Abbildungen finden sich die besten Netze nach 10 Generation, so wie eine Übersicht über den Verlauf des Trainings.
+
+			% MNIST
+
+			Wie in \ref{mnist} nachzulesen ist, ist MNSIT ein bereits \textit{"gelöstes"} Problem, bei dem schon Genauigkeiten von über $99$ erreicht wurden.
+			Das letzte Prozent wird meist erst mit geieignetem Preprocessing der Daten erreicht.
+
+			Vergleicht man die Resultate mit denen von \textit{EXACT}, so sieht man, dass die entstehenden Netze wie zu erwarten kompakter sind.
+			\textit{EXACT} lief über einen längeren Zeitraum verteilt auf vielen Computern gleichzeitig.
+			Welcher Alogorithmus schneller ist ist deshalb schlecht abzuschätzen.
+			Die Accuracy ist vergleichbar, \textit{EXACT} erreicht in 4 Läufen eine Accuracy zwischen $97.58$ und $98.32$.
+			Auch Y. Sun et all erreichen eine etwas bessere Accuracy von $98.72$.
+
+		
+	\section{Ausblick}
+
+		Wie bereits in \ref{ergeb} diskutiert wäre es interessant \textit{convNEAT} auf weiteren Benchmarkproblemen, wie dem \textit{ImageNet} Datensatz zu testen,
+		die noch nicht \textit{"gelöst"} sind. Hier würde sich zeigen wie flexibel und gut \textit{convNEAT} wirklich ist.
+
+		Die Hyperparameter von \textit{convNEAT} könnten zu dem noch intensiver getestet werden und die Performance so noch einmal deutlich zu verbessern.
 
 			
 
