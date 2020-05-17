@@ -27,16 +27,6 @@
 \usepackage{marvosym}
 \usepackage{tabularx}
 
-
-\usepackage[
-	backend=biber,
-	style=alphabetic,
-	sorting=ynt,
-]{biblatex}
-\addbibresource{thesis.bib}
-
-\pgfplotsset{compat=1.16}
-
 %Easier abs und norm
 \DeclarePairedDelimiter\abs{\lvert}{\rvert}%
 \DeclarePairedDelimiter\norm{\lVert}{\rVert}%
@@ -48,6 +38,16 @@
 \let\oldnorm\norm
 \def\norm{\@ifstar{\oldnorm}{\oldnorm*}}
 \makeatother
+
+\usepackage[
+	backend=biber,
+	style=alphabetic,
+	sorting=ynt,
+]{biblatex}
+\addbibresource{papers.bib}
+
+\pgfplotsset{compat=1.16}
+
 
 \DeclareMathOperator{\rank}{rank}
 \DeclareMathOperator{\trace}{trace}
@@ -61,11 +61,15 @@
 \newcommand{\tSig}{\tilde{\Sigma}}
 \newcommand{\hSharpe}{\hat{\theta}^2}
 
+%\theoremstyle{plain}
+%\newtheorem{hlem}{Hilfslemma}
 \newtheorem{satz}{Satz}[section]
 \newtheorem{theorem}[satz]{Theorem}
 \newtheorem{lemma}[satz]{Lemma}
 \newtheorem{kor}[satz]{Corollary}
+%\theoremstyle{definition}
 \newtheorem{defi}[satz]{Definition}
+%\theoremstyle{remark}
 \newtheorem{rem}[satz]{Remark}
 \newtheorem{exa}[satz]{Example}
 
@@ -83,179 +87,218 @@
 
 \section{Einleitung}
 
-	[On a stock market, a possible investor wants to maximize the amount of money he gains from buying assets and selling them at a later time. As we are not able to predict the behavior of the stock market, stochastic models are important for trying to solve this problem. We decide to model it by assuming a distribution that matches the returns of our assets, further using past data to estimate the specific parameters of it. If we are then able to fix the distribution, we can make the objectively best choice of assets we chose to buy and how many of them. Here objectively best choice means that given a specific utility function best describing our needs, our choice of assets will on average deliver the highest amount of utility. But as these parameters have to be estimated and the estimates depend on past data, the estimation has an included risk which we have to take into consideration. We call the  assets we hold a portfolio, and the method deciding what portfolio to buy a portfolio rule.
-	
-	For a long time portfolios were chosen by `proven in action' methods, which only use basic mathematical methods for their computation. One of them is the standard plug-in portfolio rule. As can easily be simulated, this rule scores poorly compared to other rules. In this thesis, we will study different plug-in rules in a mathematically accurate way and derive the `best' plug-in rule for different situations. Further we will prove that the often used standard plug-in rule is strictly dominated by other rules and consecutively is worse in every situation. To get these results, we expand the argumentation of Raymond Kan and Guofu Zhou in their paper 'Optimal Portfolio Choice with Parameter Uncertainty' \cite{kan_and_zhou}. We finish the thesis by simulating different portfolio rules on a dataset created by parameters of real stock market data, which will confirm the earlier results.
-	] This indroduction is already done
+	Der größer werdende Einfluss von künstlicher Intelligenz und machinellem Lernen ist in unserer Gesellschaft nicht mehr zu leugnen.
+	In vielen Bereichen haben sich sogenannte künstliche neuronale Netzwerke als vielseitiges Mittel zur Findung von Mustern und Lösung von Problemen erwiesen.
+	Unter anderem in Spracherkennung, Bilderkennung, Übersetzung, Prognose und Vorhersage von Zeitreihen, Suchmaschinen oder in medizinischen Systemen werden
+	alltäglich Lösungen eingesetzt, die auf einem gut traniertem neuronalem Netz basieren.
+	Eine Untergruppe der neuronalen Netze sind die \textit{Convolutional Neural Networks}, welche die neuronalen Netze um Faltungsoperationen erweitern.
+	Besonders bei Bild und Textverarbeitung sind diese Netzte zum State-of-the-Art.
+	Hierbei muss für jede neue Aufgabe ein neues Netz angepasst und auf großen Datenmengen trainiert werden.
+	Geignete Hyperparameter zu finden ist oft ein schwieriges Problem, das in der Regel von Experten übernommen werden muss.
+	Durch systematisches Ausprobieren und Testen optimieren diese auf Basis ihrer Expertise und Erfahrung per Hand die Parameter der Netze.
+	Der entwickelt Algorithmus \textit{convNEAT} automatisiert diesen Prozess.
+	Durch einen genetischen Evolutionsalgorithmus werden gute Kanidaten generiert, selektiert, trainiert und weiter verbessert.
+	Dies geschieht problemunabhängig und ermöglicht mit genug Rechenleistung automatisch auf eine gleiches, wenn nicht sogar besserer Ergebnis zu kommen, als wenn die Hyperparametersuche mit anderen Mitteln geschieht.
+
 \clearpage
 
 	
 \section{Problemstellung}
 
-	Bevor wir uns genauer mit dem der Problemstellung der Optimierung von Topologie und Hyperparametern von Convolutional Neural Networks beschäftigen folgte zuerst eine kleine Einführung in neuronale Netze.
-	Um besser verstehen zu können wofür neuronale Netze verwendet werden betrachten wir zunächst ein weitverbreitetes Standardproblem im Bereich des machinellen Lernens,
-	dass wir später auch mit unserem Algorithmus lösen können:
+	Bevor wir uns genauer mit dem der Problemstellung der Optimierung von Topologie und Hyperparametern von neuronalen Netzen (\textit{Neural Networks}) beschäftigen folgte zuerst eine kleine Einführung in neuronale Netze.
+	Um besser verstehen zu können wofür neuronale Netze verwendet werden betrachten wir zunächst beispielhaft ein weitverbreitetes \textit{Benchmarkproblem} im Bereich des machinellen Lernens,
+	dass später mit unserem Algorithmus gelöst werden kann.
 
 	\subsection{Handschrifterkennung}\label{mnist}
 
-		Eine Aufgabe für die sich neuronale Netzte hervorragend eignen ist Handschrifterkennung.
-		Das Problem besteht darin eine Zahl die vorher noch nicht gesehen wurde nur anhand eines Bildes richtig zu klassifizieren, also auszugeben, was für eine Zahl abgebildet ist.
-		Für Menschen ist diese Aufgabe mühelos lösbar, aber würde man ohne lernfähige Methoden einen Algorithmus zur Erkennung schreiben wollen, so wird dieser sehr kompliziert.
-		Neuronale Netzte bieten hier eine simple und einfache Lösung.
-		Der MNIST Datensatz \cite{mnist_data} besteht aus 70.000 Schwarz-Weiß-Bildern von Zahlen in einer Auflösung von 28x28 Pixeln. Die Aufgabe besteht darin mit 60.000 dieser Bildern (Trainingsdaten)
-		Muster zu erkennen. Bewertet wird danach, wie gut der Algorithmus die 10.000 weiteren vom Algorithmus noch nicht gesehenen Zahlen (Testdaten) klassifiziert.
+		Eine Aufgabe für die sich neuronale Netzte hervorragend eignen ist die Handschrifterkennung.
+		Das Problem besteht darin eine Zahl, die vorher noch nicht gesehen wurde, nur anhand eines Bildes richtig zu klassifizieren, also auszugeben, was für eine Zahl abgebildet ist.
+		Für Menschen ist diese Aufgabe mühelos lösbar, aber würde man ohne lernbasierte Methoden einen Algorithmus zur Erkennung schreiben wollen, so wäre dies sehr kompliziert.
+		Neuronale Netzte bieten hier eine simple und einfache Lösung.\\
+
+		Der MNIST Datensatz \cite{mnist_data} besteht aus 70.000 Schwarz-Weiß-Bildern von Zahlen in einer Auflösung von 28x28 Pixeln.
+		Die Aufgabe besteht darin mit Hilfe von 60.000 dieser Bildern (Trainingsdaten) einen Klassifizierer zu erstellen.
+		Bewertet wird dieser danach, wie gut der Algorithmus die 10.000 weiteren vom Algorithmus noch nicht gesehenen Zahlen (Testdaten) klassifiziert.
+
+		\begin{figure}[h]
+			\centering
+			\includegraphics[scale=0.7]{img/mnist_example.png}
+			\caption{Beispiele aus dem Datensatz MNIST \cite{mnist_data}}
+			\label{fig:mnist}
+		\end{figure}
 
 	\subsection{Klassifikationsprobleme}
 
-		Die allgemeine Problemstellung die ein Neural Network löst ist die folgende:\\
+		Die allgemeine Problemstellung die ein \textit{Neural Network} lösen kann ist die folgende:\\
 		Gegeben sei eine Zielfunktion $f:\mathcal{H} \to \mathcal{G}$.\\
-		Da diese Funktion aber nicht bekannt ist soll sie nun möglichst gut approximiert werden. \\
-		Hierzu muss aus einer Menge von Funktionen $f_p:\mathcal{H} \to \mathcal{G}$ mit $p \in \Theta$ aus dem Parameterraum, diejenige ausgewählt werden, die am $f$ möglichst gut approximiert.
+		Da diese Funktion aber nicht bekannt ist, soll sie möglichst gut approximiert werden. \\
+		Hierzu muss aus einer Menge von Funktionen $f_p:\mathcal{H} \to \mathcal{G}$ mit $p \in \Theta$ aus dem Parameterraum, diejenige ausgewählt werden, die $f$ am besten approximiert.
 		In der Praxis ist es nicht leicht zu sagen, was es bedeutet, dass $f_p$ eine gute Approximation für $f$ ist.
-		Für unsere Anwendung sind vorallem Klasifaktionsprobleme interessant, also (z.B. der Fall das $\mathcal{G}$ endlich ist und alle verschiedenen Klassen enthält.
-		Um in diesem Fall die Güte quantifizieren zu können und um verschiedene Funktionen $f_p$ vergleichen zu können definieren wir die Genauigkeit auf den Testdaten,
-		die aus dem Englischen \textit{classiication accuracy} auch kurz als \textit{Accuracy} bezeichnet wird:
+		Für unsere Anwendung sind vorrangig Klassifaktionsprobleme interessant, hier enthält $\mathcal{G}$ alle verschiedenen Klassen und ist meistens endlich.
+		Um in diesem Fall die Güte quantifizieren zu können, und um verschiedene Funktionen $f_p$ vergleichen zu können, definieren wir die Genauigkeit auf den Testdaten,
+		die aus dem Englischen \textit{classification accuracy} auch kurz als \textit{Accuracy} bezeichnet wird:
 
 		\begin{defi}[Classification accuracy] ~\\
 			Zu der zu approximierenden Funktion $f$ betrachten wir eine Menge von $m$ Testdaten \\
 			$(t_i, f(t_i)) \in \mathcal{G} \times \mathcal{H}$ $i \in \{1, \cdots , m\}$ mit korrekt klassifizierten Punkten $t_i$. \\
 			Die Accuracy $acc$ ist nun definiert als:
-			$$ acc(p) = \frac{1}{m} \sum_{k=1}^m \delta_{f(t_i)f_p(t_i)} \text{ wobei } \delta_{ij} =
+			$$ acc(f_p) = \frac{1}{m} \sum_{k=1}^m \delta_{f(t_i)f_p(t_i)} \text{ wobei } \delta_{ij} =
 			\begin{cases}
 				1 & i = j \\
 				0 & \, \text{sonst}
 			\end{cases}$$
 			Die Accuracy gibt also an welcher Anteil der Testdaten korrekt klassifiziert wird.
 		\end{defi}
-		
-		Um nun geeignete Parameter aus $\Theta$ zu finden, ohne das wir die Testdaten verwenden dürfen, gibt es einen Trainingsdatensatz mit $n$ Daten\\
-		$(x_i, f(x_i)) \in \mathbf{G} \times \mathbf{H}$ $i \in \{1, \cdots , n\}$, die ebenfalls bereits richitg klassifiziert sind.
-		Aktuelle Methoden des machinellen Lernens optimieren nun die \textit{Accuracy} auf den Trainingsdaten und hoffen, dass dadurch auch die \textit{Accuracy} auf den
-		Testdaten gut wird, also das neurale Netz gut generalisiert hat.\\
 
-		Wenn wir erneut das Klasifaktionsproblem MNIST betrachten ergibt sich insgesamt z.B: \\
-		$\mathcal{H} = \mathbb{R}^{28 \times 28}$, $\mathcal{G} = \{0, \cdots, 9\}$ sowie $n = 60.000$ Trainingsdaten und $m = 10.000$ Testdaten
+		Um geeignete Parameter aus $\Theta$ zu finden, ohne das wir die Testdaten verwenden dürfen, gibt es einen Trainingsdatensatz mit $n$ Daten
+		$(x_i, f(x_i)) \in \mathbf{G} \times \mathbf{H}$ $i \in \{1, \cdots , n\}$, die ebenfalls bereits richitg klassifiziert sind.
+		Aktuelle Methoden des machinellen Lernens optimieren nun die \textit{Accuracy} auf den Trainingsdaten, was auch die \textit{Accuracy} auf den
+		Testdaten verbessert. Letzteres gibt nach dem Training an, wie gut der Klassifizierer neuen Daten vorhersagen kann
+		und dient als Vergleichsmetrik zwischen mehreren Klassifizierern.\\
+
+		Wenn wir erneut das Klasifaktionsproblem MNIST betrachten ergiben sich insgesamt z.B: \\
+		$\mathcal{H} = \mathbb{R}^{28 \times 28}$, $\mathcal{G} = \{0, \cdots, 9\}$ sowie $n = 60.000$ Trainingsdaten und $m = 10.000$ Testdaten.
 
 
 	\subsection{Neuronale Netze}\label{nets}
 		
 		\subsubsection{Neuronen}
 
-			Um verstehen zu können was neurale Netzte sind schauen wir uns zuerst den Grundbaustein an, aus denen Sie bestehen, die (künstlichen) Neuronen.
-			Ein Neuron ist eine kleine Einheit die beliebig viele Inputs $x_1, \cdots, x_n$ erhält und daraus einen Output $y$ errechnet.
-			Grafisch lässt sich das folgendermasßen vorstellen:
+			Um verstehen zu können was \textit{neurale Netzte} (im Verlauf auch kürzer \textit{Netze} genannt) sind, schauen wir uns zuerst den Grundbaustein an, aus denen sie bestehen,
+			die (\textit{künstlichen}) \textit{Neuronen}.
+			Ein Neuron ist eine kleine Einheit die eine Menge Inputs $x_1, \cdots, x_n$ erhält und daraus einen Output $y$ berechnet.
+			Graphisch lässt sich das folgendermaßen vorstellen:
 
-			% Neuron Bild
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.7]{img/neuron.png}
+				\caption{Ein Neuron \cite{textbook}}
+				\label{fig:neuron}
+			\end{figure}
 
 			\begin{defi}[Neuron] ~\\
-				mathematisch gesehen handelt es sich bei einem Neuron um eine Funktion\\
+				Mathematisch gesehen handelt es sich bei einem Neuron um eine Funktion\\
 				$y = g(\mathbf{x}) = \sigma(\sum_{j=1}^n \omega_jx_j + b)$ wobei $\sigma$ die Aktivierungsfunktion des Neurons ist.
 			\end{defi}
 
-			$\omega_j$ und $b$ sind dabei die Gewichte und der Bias des Neurons, diese beiden beinflussen, was genau das Neuron berechnen kann und müssen trainiert werden.
+			$\omega_j$ und $b$ sind dabei die Gewichte und der Bias des Neurons, diese beiden beinflussen, was genau das Neuron berechnet und müssen trainiert werden.
 			Sie sind also Teil des Parameterraums $\Theta$ eines neuronalen Netzes.
 			Sobald sie einmal festgelegt wurden ändern Sie sich jedoch nicht mehr, sind also unabhängig von $\mathbf{x}$.
-			Wie $\sigma$ aussieht beeinflusst wie gut sich ein Netzt trainieren lässt und kann ausgewählt werden.
+			Welches $\sigma$ gewählt wird beeinflusst, wie sich ein Netzt beim Training verhält und wird problemspezifisch angepasst.
 			Es handelt sich um den ersten Hyperparameter, der beeinflusst wie die Funktion $f_p$ für ein festes $p \in \Theta$ aussieht. Dazu später mehr.
 			In der Praxis werden zwei Aktivierungsfunktionen häufig verwendet, Die Sigmoid- und die ReLU-Aktivierungsfunktion:
 
 			\begin{defi}
-				Die Sigmoidfunktion ist definiert als \\
+				Die Sigmoidfunktion ist definiert als
 				$$sig(z) \coloneqq \frac{1}{1+e^{-z}}$$
 			\end{defi}
 			\begin{defi}
-				Eine weitere Funktion ist die ReLU-Funktion: \\
+				Eine weitere Funktion ist die ReLU-Funktion:
 				$$ReLU(z) = \max(0, z)$$
 			\end{defi}
 
-			Beide Funktionen haben Eigenschaften die sie zu guten Kandidaten für Aktivierungsfunktionen machen, da Sie das schnelle und effektive Trainieren von Neuronalen Netzten ermöglichen.
+			Beide Funktionen haben Eigenschaften die sie zu guten Kandidaten für Aktivierungsfunktionen machen, da sie das schnelle und effektive Trainieren von neuronalen Netzten ermöglichen.
 
 		\subsubsection{Fully Connected Layer}
 
-			Ein neuronales Netzt besteht nun aus sogenannten \textit{Layern} von Neuronen. Das sind Schichten die viele Neuronen enthalten, die nicht untereinander, aber mit den
+			Ein neuronales Netzt besteht aus sogenannten \textit{Layern} von Neuronen. Das sind Schichten die viele Neuronen enthalten, die nicht untereinander, aber mit den
 			Neuronen der benachbarten Schichten, bzw \textit{Layern} verbunden sind. \\
 			Eine \textit{Layer} fasst also die einzelnen Funktionen der $m$ Neuronen $g_i$ zu einer großen Funktion $g$ zusammen.
 			$g$ operiert auf einem Vektor $\mathbf{X}$, der als Komponenten alle Ouputs der vorherigen Layer enthält.
 			Jedes $g_i$ enthält immernoch seine eigenen Parameter $\omega_1^i, \cdots, \omega_n^i$ und $b^i$.
 			
-			In normalen neuronalen Netzten gibt es nur sogenannte \textit{Fully Connected Layer}, das sind \textit{Layer}, bei denen der Output jedes Neurons
+			In normalen neuronalen Netzten gibt es nur sogenannte \textit{Fully Connected Layer} oder \textit{Dense Layer}, das sind \textit{Layer}, bei denen der Output jedes Neurons
 			einer der Inputs jedes Neurons in der nächsten \textit{Layer} ist. Die beiden \textit{Layer} sind also vollständig miteinander verbunden.
-			Eine \textit{Fully Connected Layer} mit $m$ Neuronen mit Funktionen $g_1, \cdots, g_m$ hat also die oben angesprochene Funktion\\
-			$g(\mathbf{x}) = (g_1(\mathbf{x}), \cdots, g_m(\mathbf{x}))^T$
+			Eine \textit{Fully Connected Layer} mit $m$ Neuronen und Funktionen $g_1, \cdots, g_m$ hat also die oben angesprochene Funktion\\
+			$$g(\mathbf{X}) = (g_1(\mathbf{X}), \cdots, g_m(\mathbf{X}))^T$$
 
-			Der Input der ersten Layer von Neutronen ist $\mathbf{x} \in \mathcal{H}$. Die einzelnen Komponenten von $\mathbf{x}$ bilden ebenfalls eine \textit{Layer},
+			Der Input der ersten Layer von Neuronen ist $\mathbf{x} \in \mathcal{H}$. Die einzelnen Komponenten von $\mathbf{x}$ bilden ebenfalls eine \textit{Layer},
 			die sogeannte \textit{Input Layer}. Die letze \textit{Layer} aus Neuronen heißt auch \textit{Output Layer}, da ihr Output die Komponenten von $f_p(\mathbf{x}) \in \mathcal{G}$ darstellt.
 			Jede anderen \textit{Layer} von Neuronen heißt \textit{hidden (versteckte) Layer}. Schon mit nur einer \textit{hidden Layer} kann man jede stetige Funktion
-			z.b. bzgl. $\norm{\cdot}_{sup}$ beliebig gut approximieren. Dieses \textit{Universalitätstheorem} erklärt warum sich neuronale Netze in so unterschiedlichen Problemen anwenden lassen.
+			z.b. bzgl. $\norm{\cdot}_{sup}$ mit steigender Anzahl an Neuronen beliebig gut approximieren.
+			Dieses \textit{Universalitätstheorem} erklärt, warum sich neuronale Netze in so unterschiedlichen Problemen anwenden lassen.
 
 			Im Fall unseres MNIST Datensatzes wäre z.B. ein einfaches Netzwerk mit einer \textit{hidden Layer} denkbar:
 
-			% Abbild Layer
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.7]{img/mnist_net.png}
+				\caption{Teilausschnitt aus einem neuronalen Netz \cite{textbook}}
+				\label{fig:layer}
+			\end{figure}
 			
 		\subsubsection{Convolutional Layer}
 
-			Da sich das Hauptaugenmerk unsere Algorithmus auf Klasifaktionsproblemen in der Bilderkennung liegt, betrachten wir zudem die dort üblichen \textit{Convolutional Neural Networks}.
+			Da sich das Hauptaugenmerk unseres Algorithmus auf Klasifaktionsproblemen in der Bilderkennung liegt, betrachten wir zudem die dort üblichen \textit{Convolutional Neural Networks}.
 			Dises erweitern die Idee der neuronale Netze um eine weitere Art zwei \textit{Layer} zu verbinden - die Faltung, im Englischen \textit{Convolution}.
-			Anders als bei den vollständig verbunden \textit{Layern} werden nur die räumlich lokalen Nachbarn zusammengefasst. Das heißt der Output eines Neurons ist nicht für jedes Neuron der nächsten
-			\textit{Layer} ein Input, sondern nur für manche (räumlich Nahe). Außerdem hat nicht jedes Neuron seine eigenen Gewichte $\omega_j$ sondern es gibt einen Faltungskern (\textit{Kernel})
-			der bestimmt wie die einzelnen Inputs gewichtet werden.
-			Wir betrachten nur die zweidimensionale Faltung, dafür müssen die einzelnen \textit{Layer} nicht eindimensional wie in Abildung %2
+			Anders als bei den vollständig verbunden \textit{Layern} werden nur die räumlich lokalen Nachbarn zusammengefasst. Das heißt, der Output eines Neurons ist nicht für jedes Neuron der nächsten
+			\textit{Layer} ein Input, sondern nur für manche (räumlich nahe). Außerdem hat nicht jedes Neuron seine eigenen Gewichte $\omega_j$ sondern es gibt einen Faltungskern (\textit{Kernel}),
+			der bestimmt, wie die einzelnen Inputs gewichtet werden.
+			Wir betrachten nur die zweidimensionale Faltung, dafür müssen die einzelnen \textit{Layer} nicht eindimensional wie in \ref{fig:layer}
 			sondern zweidimensional angeordnet werden. \\
 			Sei $\mathbf{X} \in \R^{m \times n}$ der Input der \textit{Layer}. Im Gegensatz zu einer \textit{Fully Connected Layer} wo\\
 			$$g(\mathbf{X})_{ij} = g_{ij}(\mathbf{X}) = \sigma(\sum_{k_1=1}^m \sum_{k_2=1}^n \omega_{k_1k_2}^{ij}\mathbf{X}_{k_1k_2} + b^{ij})$$
 			gelten würde, gibt es nun einen Faltungskern $K \in \R^{\hat{m} \times \hat{n}}$ und es gilt
-			$$g(\mathbf{X})_{ij} = g_{ij}(\mathbf{X}) = \sigma(\sum_{k_1=0}^{\hat{m} - 1} \sum_{k_2=0}^{\hat{n} - 1} K_{k_1k_2}^{ij} \mathbf{X}_{i + k_1, j + k_2} )$$
+			$$g(\mathbf{X})_{ij} = g_{ij}(\mathbf{X}) = \sigma(\sum_{k_1=1}^{\hat{m}} \sum_{k_2=1}^{\hat{n}} K_{k_1k_2}^{ij} \mathbf{X}_{i + k_1 - 1, j + k_2 - 1})$$
 			Oft wird zudem $\sigma(z) \coloneqq z$ gewählt, bzw. kein $\sigma$ verwendet.
-			Intuitiv lässt sich die Faltung so interpretieren, dass der Faltungskern über den Input läuft und an jeder Stelle einen Ouptut generiert. Dieser Vorgang ist hier noch einmal dargestellt:
+			Intuitiv lässt sich die Faltung so interpretieren, dass der Faltungskern über den Input läuft und an jeder Stelle einen Output generiert. Dieser Vorgang ist hier noch einmal dargestellt:
 
-			%Abbild Convo
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.7]{img/convolution.png}
+				\caption{grapische Darstellung einer Faltung mit Faltungskern $K \in \R^{3 \times 3}$ \cite{convo}}
+				\label{fig:convo}
+			\end{figure}
 
 			Es fällt zudem auf, dass die Größe von $g(\mathbf{X})$ nun nicht mehr beliebig gewählt werden kann, wie bei der \textit{Fully Connected Layer}, stattdessen ist die Größe durch die Faltung
 			eindeutig bestimmt. Es gilt $g(\mathbf{X}) \in \R^{m' \times n'}$ mit $m' = m - \hat{m} + 1$ und $n' = n - \hat{n} + 1$.
 
 			Die Gewichte $K$ des Faltungskerns werden trainiert und sind Teil des Parameterraums $\Theta$ während $\hat{m}$ und $\hat{n}$ Hyperparameter sind.
+			Zudem gibt es noch weitere Hyperparameter wie \textit{stride} oder \textit{padding}. Für mehr Informationen siehe \cite{convo}.
 
 		\subsubsection{Pooling Layer}
-			In \textit{Convolutional Neural Networks} gibt es noch eine zweite neue Art \textit{Layer} zu verbinden, die \textit{Pooling Layer}.
-			Sie funktionieren sehr ähnlich zu der \textit{Convolutional Layer} gibt es aber keinen Faltungskern mit Gewichten, sondern die räumlich nahen Inputs werden mit einer anderen
+			In \textit{Convolutional Neural Networks} gibt es noch eine dritte Art zwei \textit{Layer} zu verbinden, die \textit{Pooling Layer}.
+			Sie ähnelt der \textit{Convolutional Layer}, statt mit einem Faltungskern werden räumlich nahen Inputs mit einer anderen
 			einfachen Funktion verknüpft:
 			\begin{align*}
 				g&(\mathbf{X})_{ij} = g_{ij}(\mathbf{X}) \\
 				= p&ool(\mathbf{X}_{i, j}, \cdots, \mathbf{X}_{i, j + \hat{n} - 1}, \mathbf{X}_{i + 1, j}, \cdots, \mathbf{X}_{i + 1, j + \hat{n} - 1},
 				   \cdots, \mathbf{X}_{i + \hat{m} - 1, j}, \cdots, \mathbf{X}_{i + \hat{m} - 1, j + \hat{n} - 1})
 			\end{align*}
-			Dies ist meistens das Maximum oder der Durschnitt. Man spricht von \textit{Max Pooling Layer} oder \textit{Average Pooling Layer}.
+			Dies ist meistens das Maximum oder der Durschnitt. Man spricht von \textit{Maximum Pooling Layer} oder \textit{Average Pooling Layer}.
 
-	\subsection{Parameter}\label{train}
-		Wir haben nun gesehen, das neuronale Netze eine Funktion $f_p$ darstellen, die von Gewichten und bias, also den Parametern $p \in \Theta$ abhängt.
+	\subsection{Parameter und Training}\label{train}
+		Wir haben nun gesehen, das neuronale Netze eine Funktion $f_p$ darstellen, die von Gewichten und Bias, also den Parametern $p \in \Theta$ abhängt.
 		Diese Parameter sind die trainierbaren Parameter des neuronalen Netzes und unterscheiden sich so von den nicht trainierbaren Hyperparametern.
-		Das Ziel besteht nun $p$ möglichst gut bezüglich der Testgenauigkeit (\textit{Accuracy}) zu wählen. Das geschieht in dem Lernverfahren von gewissen Anfangsparametern $p_0$
-		iterativ verbessert werden. Diesen iterative Vorgang nennt man "trainieren". \\
-		Dazu werden auf dem Gradientenabstieg (\textit{Gradiant Descent}) basierende Methdoden verwenden, die eine Kostenfunktion minimieren,
+		Das Ziel besteht nun $p$ möglichst gut bezüglich der Trainingsgenauigkeit (\textit{Accuracy}) zu wählen. Das geschieht mit iterativen Lernverfahren, die ausgehend von initialen Anfangsparametern 
+		immer bessere $p$ erzeugen. Diesen iterative Vorgang nennt man "trainieren". \\
+		Dazu werden oft auf dem Gradientenabstieg (\textit{Gradiant Descent}) basierende Methdoden verwendet, die eine Kostenfunktion über $p$ minimieren,
 		die angibt wie gut $f_p$ die Trainingsdaten vorhersagen kann. Für das Lernen bieten aktuelle Bibliotheken bereits vorgefertigte Optimierer, wie z.B.
-		in \textit{PyTorch} den \textit{Stochastic gradiant descent} (\textit{SGD}) oder den Optimizier \textit{ADAM}.
-		Alle Optimizer müssen mit verschiedenen Hyperparametern wie der \textit{learning rate} eingestellt werden, die z.b. angibt wie schnell/fein sich die Werte verbessern. \\
-		Ohne zu viel auf diese Hyperparameter eingehen zu wollen ist klar, das die Auswahl dieser Hyperparameter ein gewisses Verständnis des Optimierers voraussetzt und einen
+		in \textit{PyTorch} den \textit{Stochastic gradiant descent} (\textit{SGD}) oder den Optimizier \textit{ADAM}. \\
+		Alle Optimierer müssen mit verschiedenen Hyperparametern wie einer \textit{learning rate} eingestellt werden, die beispielsweise angibt wie schnell/fein sich $p$ verbessert. \\
+		Ohne zu viel auf diese Hyperparameter eingehen zu wollen ist klar, dass die Auswahl dieser Hyperparameter ein gewisses Verständnis des Optimierers voraussetzt und einen
 		großen Einfluss auf die Trainingsgeschwindigkeit und Güte des Ergebnisses hat. \\
 
 		Zusätzlich gibt es noch weitere nicht trainierbare Hyperparameter, darunter unter anderem die Anzahl und Art von \textit{Layern} und welche \textit{Layer} untereinander verbunden sind.
 		Man spricht hier oft von der Topologie des Netzes. Des weiteren gibt es noch die Hyperparameter der einzelnen Layern wie
-		die Anzahl der Neuronen (bei einer \textit{Fully Connected Layer}) oder die Größe des Faltungskerns (bei einer \textit{Convolutional Layer}).
+		die Anzahl der Neuronen (bei einer \textit{Fully Connected Layer}) oder die Größe des Faltungskerns (bei einer \textit{Convolutional Layer}). \\
+		All diese Hyperparameter des Netzes ändern $\Theta$ und wie $f_p$ für ein festes $p \in \Theta$ aussieht.
 	
 	\subsection{Hyperparametersuche}
 		Insgesamt gibt es also jede Menge Hyperparameter, die gewählt werden müssen und ein Vielzahl von möglichen Topologien. Ohne gründliches Wissen über neuronale Netze
-		ist es für den Einsteiger sehr schwer geignete Hyperparamter zu finden. In der Praxis hat die Erfahrung gezeigt, dass manche Dinge bessern funktionieren als andere.
-		Mit genügend Erfahrung kann man strukturiert verschiedene Hyperparameter austesten. Diese durch Erfahrung gewonnen Erkenntnisse finden sind zum Beispiel in dem Paper
-		"Practical Recommendations for Gradient-Based Training of Deep Architectures" von Yoshua Bengio \cite{parameters}.
+		ist es für den Einsteiger sehr schwer geignete Hyperparamter zu finden. Erfahrungen aus der Praxis zeigen, in welchen Situation welche Werte sinnvoll sind.
+		Mit genügend Erfahrung kann man strukturiert verschiedene Hyperparameter austesten. Diese durch Erfahrung gewonnen Erkenntnisse und weitere Ratschläge finden sind zum Beispiel in dem Paper
+		"Practical Recommendations for Gradient-Based Training of Deep Architectures" von Yoshua Bengio \cite{parameters}.\\
 
 		Einem Anwender, der sich mit neuronale Netzen nicht gut auskennt, sollte es aber im besten Fall erspart werden, sich so tief in die Materie einlesen zu müssen.
-		Obwohl moderne Bibliotheken wie \textit{PyTorch} mit bereits Implementierten Methoden und Klassem viele lästige und komplizierte Aufgaben bereits abnehmen,
-		und so auch Nicht-Experten das Experimentieren mit neuronalen Netzen ermöglichen wäre es wünschenswert auch die Wahl der Hyperparameter zu automatisieren.\\
+		Obwohl moderne Bibliotheken wie \textit{PyTorch} mit bereits implementierten Methoden und Klassem viele lästige und komplizierte Aufgaben bereits abnehmen,
+		und so auch Nicht-Experten das Experimentieren mit neuronalen Netzen ermöglicht wird, wäre es wünschenswert auch die Wahl der Hyperparameter zu automatisieren.\\
 
-		Das Ziel ist es, dass ein Anwender nur deklarativ die Trainings und Testdaten angibt und ein Algorithmus automatisch das passende Netz auswählt und
+		Das Ziel ist es, dass der Anwender nur deklarativ die Trainings- und Testdaten angibt und ein Algorithmus automatisch das passende Netz auswählt und
 		es trainiert, so dass mit genügend Rechenzeit auch ohne Expertise ein gutes Resultat ensteht.
 		Auch wenn man schon alles über neuronale Netze weiß ist dies trotzdem erstrebenswert, da so mehr Zeit für wichtigere Aufgaben bleibt,
-		während die immer besser werdenden Computer die Rechenarbeit übernehmen
+		während die immer besser werdenden Computer die Rechenarbeit übernehmen. \\
+		Diesen Algorithmus zu entwickeln war meine Aufgabe im Fachpraktikum und das Resultat ist der Algorithmus \textit{convNEAT}.
 
 	\subsection{bisherige Ansätze}\label{ansatz}
 
@@ -265,17 +308,17 @@
 
 		\subsubsection{Grid Search}\label{grid}
 
-			Für jeden Parameter der gewählt werden soll kan man ein Intervall angeben, in dem nach dem Parameter gesucht werden soll.
+			Für jeden Parameter der gewählt werden soll kan man ein Intervall angeben, in dem nach dem optimalen Wert des Parameter gesucht werden soll.
 			So kann man den Suchraum definieren, in dem man nach den besten Hyperparametern suchen möchte.
 			
-			Die Idee des \textit{Grid Search} ist es nun für jedes dieser Werteintervalle ein paar Werte auszuwählen.
+			Die Idee des \textit{Grid Search} ist es nun für jedes dieser Werteintervalle ein Liste diskreter Werte auszuwählen.
 			Für jede Kombination aus möglichen Werten, lässt man nun einmal das entstehende Netz trainieren, bis schlussendlich die besten Hyperparameter gefunden wurden.
 
 			Durch geschicktes Design kann \textit{Grid Search} noch verbessert werden, z.B. indem man bei der Auswahl der Werte aus dem Werteintervall
-			Wissen einfließen lässt, wie z.B. das sich die \textit{learning rate} des Optimizers für ähnliche Größenordnungen auch ähnlich verhält und 
+			Wissen einfließen lässt, wie z.B. dass sich die \textit{learning rate} des Optimizers für ähnliche Größenordnungen auch ähnlich verhält und 
 			man deshalb besser logarithmisch linear Werte auswählt also z.B. [0.1, 0.01, 0.001, 0.0001].
-			Auch kompliziertere Erweiterungen wie geschatelte Suchen mit immer höherer Auflösung oder
-			nur ein paar Hyperparameter auf einmal zu testen und dafür mehrere Tests durchzuführen kann die Güte und Geschwindigkeit des Verfahrens verbessern.
+			Auch kompliziertere Erweiterungen wie geschatelte Suchen mit immer höherer Auflösung oder portionsweise
+			nur ein paar Hyperparameter auf einmal zu testen und dafür mehrere Tests durchzuführen, kann die Güte und Geschwindigkeit des Verfahrens verbessern.
 			Für weitere Details siehe \cite{parameters}.
 
 			Trotzdem bleibt \textit{Grid Search} sehr rechenaufwändig, da die Anzahl an Tests exponentiell in der Anzahl der Hyperparameter ist.
@@ -283,23 +326,26 @@
 
 		\subsubsection{Random Search}
 
-			Im Gegensatz zur \textit{Grid Search} die systematisch den Suchraum absucht können durch zufällige Wahl von Hyperparametern erstaunlicherweise
+			Im Gegensatz zur \textit{Grid Search}, die systematisch den Suchraum absucht kann durch die zufällige Wahl von Hyperparametern erstaunlicherweise
 			viel schneller und soagar bessere Ergebnisse erzielt werden. \cite{randomsearch}
 			Für jeden Parameter wird eine Verteilung angeben, meistens eine Gleichverteilung über das logaritmische Werteintervall (siehe \ref{grid})
 			oder eine multinomiale Verteilung bei diskreten Hyperparametern.
 
 		\subsection{NEAT}
 
-			Einen ganz anderen Ansatz verfolgen sogenannte genetische Algorithmen. Besonders hervorzuheben ist hier das Paper
-			"Evolving Neural Networks through Augmenting Topologies" \cite{neat} aus dem Jahr 2002, das den Grundstein für alle vergleichbaren Methoden gelegt hat.
-			Die Idee ist simpel. Um eine bestmögliche Netztopologie zu finden, kann man mit einem möglichst kleinen Netz anfangen und durch Mutation und Crossover
-			neue immer größere Netze erzeugen, die immer besser werden. Sobald die enstehenden Netzt nicht mehr besser werden kann man aufhören.
+			Einen ganz anderen Ansatz verfolgen sogenannte genetische Algorithmen. Sie basieren auf den drei genetischen Operatoren \textit{Mutation}, \textit{Selektion} und \textit{Crossover}.
+			Ähnlich zur Evolution in der Natur wird eine Population verwaltet. Die einzelnen Individuen können mutieren, durch evolutionären Druck aussortiert werden und aus zwei
+			Individuen können nachkommen generiert werden, die Teile der Gene der Eltern teilen.
+			
+			Für Hyperparameterwahl ist das Paper "Evolving Neural Networks through Augmenting Topologies" \cite{neat} aus dem Jahr 2002 hervorzuheben, das den Grundstein für alle vergleichbaren Methoden gelegt hat.
+			Die Idee ist simpel. Um eine bestmögliche Netztopologie zu finden, kann man mit einem möglichst kleinen, einfachem Netz anfangen und durch Mutation und Crossover
+			neue immer größere Netze erzeugen, die immer besser werden. Sobald die enstehenden Netze nicht mehr besser werden kann man aufhören.
 
-			Ein Nachteil an NEAT ist aber, dass der Algortihmus in einer Zeit entwickelt wurde, als die Computer noch nicht so viele Möglichkeiten hatten wie heutzutage
+			Ein Nachteil an NEAT ist jedoch, dass der Algortihmus in einer Zeit entwickelt wurde, als die Computer noch nicht so viele Möglichkeiten hatten wie heutzutage
 			und außerdem zeitdem viele Fortschritte im Bereich des machinellen Lernens gemacht wurden, die bei \textit{NEAT} nicht berücksichtigt werden konnten.
 			In \textit{NEAT} werden einzelne Verbindungen und Neuronen erzeugt und mutiert. \textit{NEAT} ist nicht darauf ausgelegt moderne Netze
-			mit mehreren Tausend Neuronen zu erzeugen, sondern nur höchstens ein paar Hundert. Das ist für aktuell Zwecke nicht mehr ausreichend.
-			Außerdem sieht \textit{NEAT} vor das auch die Parameter in $\Theta$ durch Evolution trainiert werden. Hierfür stehen
+			mit mehreren Tausend Neuronen zu erzeugen, sondern nur höchstens ein paar Hundert. Das ist für aktuelle Zwecke nicht mehr ausreichend.
+			Außerdem sieht \textit{NEAT} vor, dass auch die Parameter in $\Theta$ durch Evolution trainiert werden. Hierfür stehen
 			mittlerweile viel bessere und performantere Methoden wie \textit{SGD} oder \textit{ADAM} zur Verfügung. \ref{train}
 
 	\clearpage
@@ -615,34 +661,8 @@
 
 		Die Hyperparameter von \textit{convNEAT} könnten zu dem noch intensiver getestet werden und die Performance so noch einmal deutlich zu verbessern.
 
-			
-
-
-
-	
-	
-
 \clearpage
 
 \printbibliography[heading=bibintoc, title={References}]
-
-\clearpage
-
-\section*{Declaration}
-	\vspace{2cm}
-	
-	\large
-	I, Mark-Oliver Wolf, avouch that I have created this thesis on my own and without help or sources but those explicitly mentioned and that I have marked any and all citations as such.
-	
-	\vspace{3cm}
-	\begin{figure}[b]
-		Kaiserslautern, \today
-		
-		\vspace{2em}
-		\begin{tabularx}{\linewidth}{@{}XX@{}}
-			\hrule&\\
-			Mark-Oliver Wolf & \\
-		\end{tabularx}
-	\end{figure}
 
 \end{document}
