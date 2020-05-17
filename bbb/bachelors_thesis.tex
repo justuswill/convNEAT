@@ -314,7 +314,7 @@
 		verleihen. So können wir besonders Klasifaktionsprobleme in der Bildverarbeitung wie den MNIST Datensatz \ref{mnist} besser lösen.
 
 		Es gibt bereits ähnliche Versuche die Ideen von \textit{NEAT} auf \textit{Convolutional Neural Networks} wie etwa
-		\textit{EXACT} von T. Desell \cite{exact} oder einen Ansatz von Y Sun et al \cite{convoneat}.
+		\textit{EXACT} von T. Desell \cite{exact} oder einen Ansatz von Y. Sun et al \cite{convoneat}.
 		Beide Ansätze haben aber Nachteile gegenüber \textit{convNEAT} zeigen aber das ein genetischer Ansatz durchaus zielführend sein kann.
 		Sie verwenden keine Kapselung der Netze in Species wie bei \textit{NEAT} und erlauben beide nur begrenzte \textit{Convolutional Neural Networks}.
 		ConvNEAT bietet eine größere Flexibilität und mehr Möglichkeiten für beliebige \textit{feedforward Convolutional Neural Networks}
@@ -440,7 +440,22 @@
 			Denn so gilt:
 			$$ logerr(score(a, p)) = logerr(a) + n * decay$$
 
-			%selektion
+			Basierend auf diesem angepasstem score können jetzt Paare aus Genomen gebildet werden die im nächsten Schritt, dem \textit{Crossover} kombiniert werden können.
+			Es gibt mehrere Möglichkeiten diese Selektion durchzuführen. In \textit{convNEAT} gibt es mehrere Möglichkeiten:
+			Von einfachen Methoden, wie die Auswahl aller besten Genome, oder der zufällifen Wahl, bei der bessere Gene höhere Wahrscheinlichkeiten,
+			die von dem Score abhängen sind haben, bis hin zu komplizierteren Methoden wie der \textit{Tournament selection} bei der zufällig eine
+			Gruppe von $k$ Genomen ausgewählt wird von denen das Beste ausgewählt wird oder \textit{stochastic universal sampling} \cite{sus}.
+
+			Welche Methode die beste ist, muss mit viel Testläufen auf verschiedenen Problemen ausgetestet werden, da meine Rechenzeit aber limitiert war konnte
+			ich nur einige wenige Tests auf dem MNIST Datensatz durchführen. Hier schien es, als ob \textit{stochastic universal sampling}
+			eine stabile und effektive Methode der Selektion ist.
+
+			Wichtig ist das die Selektion auch ein paar schlechtere Netze überleben lässt. Denn vielleicht sind manche Netze nicht lange genug trainiert worden
+			und zeigen ihr volles Potenzial nach etwas mehr Zeit. \textit{stochastic universal sampling} besitzt diese Eigenschaft.
+
+			Um eine Intuition für die verschiedenen Selektionsfunktion zu bekommen sind sie hier verglichen:
+
+			% Abbild Selektion
 		
 		\subsection{Crossover}
 
@@ -448,10 +463,103 @@
 			Dieses neue Genome erhält alle Gene der Eltern. Wichtig für \textit{convNEAT} sind, wie bei \textit{EXACT} \cite{exact},
 			die Parameter \textit{more fit parent crossover rate} und \textit{less fit parent crossover rate}.
 			Diese beiden beschreiben wie viel Prozent des jeweiligen Genomes aktiviert bleiben soll.
-			Gene, also vor allem Kanten, die im besseren (was genau besser hier beduetet unter \ref{select})
-			Die anderen Gene werden deaktiviert insofern das möglich ist.
+			Gene (hier vor allem die Kanten), die beispielsweise nur im besseren Genom (mit höherem Score \ref{select}) vorkommen,
+			werden mit Wahrscheinlichkeit \textit{more fit parent crossover rate} aktiviert übernommen.
+			Alle anderen Gene werden deaktiviert insofern das möglich ist.
 
-			%ids 
+			Da die Eltern zwei beliebige Graphen sein können, ist es schwierig zu sagen, welche Gene gleich sind und wie die nicht gleichen Gene kombiniert werden sollen.
+			Abhilfe schafft das Konzept der \textit{historical markers} aus \textit{NEAT}. Jedes Gene bekommt eine eindeutige Zahl zugeordnet und wenn durch
+			Muatation neue Kanten oder Knoten entstehen werden ihnen neue Zahlen zugeordnet.
+			Möchte man zwei Genome vergleichen, kann man sich die \textit{Marker} anschauen und sieht sofort wie viele Genome gleich sind und wie
+			unterschiedlich (im biologischen Sinne) die Genome sind.
+
+			Ein simples Beispiel für einen Crossover findet sich in in Abb. 
+
+			% Abbild Crossover
+
+		\subsection{Clustering}
+
+			Mit den obigen genetischen Operatoren kann ein genetischer Algorithmus entworfen werden, der theoretisch immer bessere Netze erzeugen kann.
+			In der Praxis tritt man jedoch auf ein Problem das schon bei der Entwicklung von \textit{NEAT} bekannt war.
+			Wird ein neues Netz generiert, z.B. durch \textit{Crossover} so kann es in der Praxis oft nicht lange überleben, bis es durch die Selektion
+			aussortiert wird. Das neue Netz braucht aber einige Zeit um durch Training, oder weitere Mutationen langsam besser zu werden, bis es
+			kompetetiv genug ist, um mit den aktuell besten Netzen verglichen werden kann, die schon über viele Generationen optimiert wurden.
+
+			Eine Lösung für das Problem ist wie bei Y. Sun et al \cite{convoneat} eine Selektion auszuwählen, die nur sehr geringen
+			\textit{Selektionsdruck} ausübt, also auch schwache Netze oft überleben lässt. Da aber mit Senkung des \textit{Selektionsdruck}
+			auch die Geschwindigkeit sinkt, mit der Fortschritte gemacht werden, verwendet \textit{convNEAT} zusätzlich das Konzept
+			der \textit{Artentrenung} (im Englischen \textit{Speciation}), im weiteren auch mit \textit{Clustering} bezeichnet.
+
+			Ähnliche Netze mit ähnlicher Topologie werden in einzelne \textit{Arten} (\textit{Cluster}) aufgeteilt, so dass Netze im gleichen
+			Cluster möglichst ähnlich und in verschiedenen Cluster möglichst verschieden sind.
+			Die Selektion erfolgt jetzt nur in den einzelnen Clustern, so dass es dauerhaft Cluster von Netzen geben kann, die sich von dem besten Cluster unterscheiden.
+			Während das beste Cluster weiter optimiert wird gibt \textit{convNEAT} auch anderen Ansätzen die Chance erforscht zu werden und optimiert zu werden.
+
+			Das Zusammenspiel der einzelnen Cluster untereinander muss auch genau geregelt sein. \textit{convNEAT} sorgt dafür, dass
+			die besten Cluster größer werden können, um mehr Rechenzeit in die Optimierung der aktuellen Lösung zu investieren, aber gleichzeitig, andere
+			Cluster nicht zu klein werden, auch wenn sie gerade schlechter sind. Cluster die sich nicht weiter verbessern, weil seine Netze einfach
+			nicht gut für das Problem sind werden irgendwann gelöscht.
+
+			Damit \textit{Clustering} funktionieren kann brauchen wir zwei Dinge: Eine Abstandsfunktion und einen Clusteralgorithmus.
+
+			\subsubsection{Ähnlichkeit}
+
+				Das Konzept von \textit{"ähnlichen"} Genomen muss nun mathematisch definiert werden.
+				Für jede Art von Gen kann ein Ahnlichkeit zwischen $0$ und $1$ defineirt werden, in Abhängigkeit davon wie unterschiedlich
+				die Hyperparameter sind. $0$ bedeutet, dass die verglichenen Gene gleich sind
+				und je unterschiedlicher zwei Gene sind, desto näher wird die Ähnlichkeit zur $1$.
+
+				\begin{defi} [Abstandsfunktion]
+					\textit{convNEAT} verwendet folgende Funktion: \\
+					$$dist = c_0*S + c_1*D + c_2*E + c_3*T + c_4*K + c_5*X$$
+					wobei $S$ der Unterschied in den gemeinsamen Kanten ist, \\
+					$D$ und $E$ zusammen die Anzahl der Gene die nur in einem der beiden Genome vorkommt, \\
+					$T$ ist der Unterschied der verwendeten Optimierer, $K$ der Unterschied in den Knoten und $X$ der Unterschied in der Anzahl der trainierten Epochen.
+				\end{defi}
+				
+				Diese Abstandsfunktion sorgt dafür, dass alle Unterschiede eine festlegbare Rolle spielen.
+				Die Parameter $c$ wurden durch Testläufe optimiert. Mit Abstand am wichtigsten sind $S$, $D$ und $E$.
+				Trotzdem bleibt das Konzept von Ähnlichkeit leicht subjektiv.
+
+			\subsubsection{Clusteralgorithmus}
+				
+				Das Problem eine Menge von Daten $\mathbf{X}$ in $k$ Cluster einzuteilen lässt sich als Optimierungsproblem darstellen. Zu minimieren ist der
+				Abstand der Mitglieder der Clusters $S_i$ zum jeweiligen Clustermittelpunkt $\mu_i$:
+
+				\begin{defi}
+					$$J \coloneqq \sum _{i=1}^{k}\sum _{x_j \in S_i} dist(x_j, \mu_i)^2$$
+				\end{defi}
+
+				Für den Fall $\mathbf{X} \in \mathbb{R}^m$ gibt es hervorragende Algorithmen wie \textit{k-Means} \cite{kmeans}, um das Optimierungsproblem
+				approximativ und sehr schnell zu lösen. \textit{k-Means} ist ein iteratives Verfahren, dass ausgehen von Start-Clustermittelpunkten $\mu_i^0$
+				iterativ immer bessere $\mu_i$ findet, in dem es den Mittelpunkt der aktuellen zu Cluster $S_i$ gehörenden Datenpunkt zum neuen $\mu_i$ macht
+				bis dieser Prozess konvergiert.
+
+				Leider lässt sich \textit{k-Means} nicht auf unser Problem anweden, da der Suchraum kein Vektorraum mit einer Basis ist,
+				der Begriff eines Mittelpunktes ist nicht defniert. Wir müssen lediglich mit dem Abstand $dist$ arbeiten. 
+
+				\textit{convNEAT} verwendet deshalb eine stark modifizierte Variante des \textit{k-Medoid} Algorithmuses.
+				Im Gegensatz zum Mittelpunkt wählen wir den \textit{"Median"}, in unserem Fall das Genom im Cluster, dass den geringsten Abstand zu allen anderen
+				Clustermitgliedern hat, also $$fit(z) \coloneqq \sum _{x_j \in S_i} dist(x_j, z)$$ minimiert.
+
+				\textit{k-Medoid} kann deshalb so umgebaut werden, dass es nur von $dist$ abhängt.
+				Einige Dinge sind noch zu beachten, z.B. darf kein Cluster zu klein werden, da sonst keine sinnvolle Selektion stattfinden kann.
+				Damit man messen kann wie sich die einzelnen Netze eines Clusters über die Zeit entwickeln muss zudem eine Art Konsistenz erhalten bleiben.
+				Ist das Beste Cluster $S_k$ für ein festes $k$ dann sollte nach dem erneuten Clustern wieder viele Netze $x_j \in S_k$ im neuen Cluster $S'_k$ sein.
+				Diese Konsistenz ist bei \textit{k-Medoid} nicht gegeben. Die Güte des Ergebnis im Bezug auf $J$ hängt stark von den Start-Clustermittelpunkten $\mu_i^0$
+				ab. \textit{k-Medoid} wird deshalb üblicherweise mit verschiedenen kompliziert gewählten $\mu_i^0$ mehrmals ausgeführt.
+				\textit{convNEAT} verzichtet auf eine komplizierte Initialiserung und verwendet stattdessen den Median der schon aus der letzten Generationen
+				bekannten Cluster als Startwert. Die Einbüße in der Funktion $J$ können durch die enstehende Konsistenz gerechtfertigt werden.
+
+				Der entwickelte \textit{consistent bounded k-Medoid} kann aber nur für festes $k$ eine Clusterung finden.
+				Für \textit{convNEAT} ist es jedoch wichtig die Anzahl der Cluster varieren zu lassen, falls durch Mutation und Crossover viele
+				neuartige Netze entstanden sind oder nach der Selektion zu wenige Netze eines Cluster übrig bleiben.
+
+				\textit{convNEAT} ändert adaptiv die Anzahl der Cluster, falls dies nötig ist und achtet trotzdem darauf, dass die Konsistenz der Cluster erhalten bleibt.
+
+				% Abbild Distanzmatrix
+
+				% Abbild Clusterung von Netzen
 
 
 			

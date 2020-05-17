@@ -82,12 +82,17 @@ def stochastic_universal_sampling(evaluated_genomes, k, selection_percentage=0.3
 if __name__ == '__main__':
     evaluated_genomes = [2*[n] for n in range(10)]
 
+    prnt = True
     for f in [cut_off_selection, tournament_selection, fitness_proportionate_selection,
               fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling]:
         out = ""
         for n in [2, 5, 10, 20]:
             k = math.floor(0.95 * n)
             l = [[i, i**(3/2)] for i in range(n, 0, -1)]
+            if prnt:
+                if n == 20:
+                    prnt = False
+                print("n = %2d [" % n + " ".join(sorted(["%.1f" % i**(3/2) for i in range(n, 0, -1)])) + "]")
             scores = {i: 0 for i in range(1, n+1)}
             for j in range(5000):
                 p = f(l, k=k)
@@ -99,6 +104,4 @@ if __name__ == '__main__':
             for pp in pro:
                 out += " %.2f" % pp
             out += " |"
-        print(out)
-
-
+        print(out, f.__name__)
