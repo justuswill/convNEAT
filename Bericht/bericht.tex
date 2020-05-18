@@ -649,31 +649,34 @@
 		\subsection{Eliten und Training}
 			
 			Damit die Netze in der Population überhaupt gute Vorhersagen auf den Validierungsdaten machen können müssen sie auf den Trainingsdaten trainieren, dies geschieht in einer Trainingsphase.
-			In dieser Phase kann jedes Netz eine feste Anzahl von Epochen auf den Daten trainieren. Die große Laufzeit des Algorithmuses ist auf diesen Schritt zurückzuführen, denn 
+			In dieser Phase kann jedes Netz eine feste Anzahl von Epochen auf den Daten trainieren. Die Laufzeit von \textit{convNEAT} ist auf diesen Schritt zurückzuführen, denn 
 			wie bei der Arbeit mit neuronalen Netzen üblich, kann das Training sehr lange, manchmal Stunden oder Tage lang dauern.
+			Wie schnell textit{convNEAT} zu einem Ergebnis kommt hängt also nur davon ab wie viele Epochen alle Netze gemeinsam trainiert werden.
 
 			Netze die schnellen Fortschritt machen werden belohnt in dem Sie länger trainieren können. Dies sorgt dafür, dass insgesamt schnellerer Fortschritt gemacht wird.
-			Besonders bei kompliziertern Problemen ist aber nicht klar, dass die festgelegte Anzahl an Epochen ausreicht um ein gutes Netz zu trainieren.
+			Besonders bei kompliziertern Problemen ist aber nicht klar, ob die festgelegte Anzahl an Epochen ausreicht um ein gutes Netz zu trainieren.
 			Je nach Hyperparameterwahl dauert es eventuell viel länger. Die Netze hätten so überhaupt keine Zeit gut genug zu werden, um das Problem lösen zu können.
 
 			Abhilfe schaffen die sogenannten \textit{Eliten}. Nach jeder Generation werden die besten Netze jedes Clusters automatisch in die nächsten Generation übernommen.
 			Nur der verbleibende Platz in der Population wird durch den Crossover aufgefüllt.
 
-			Das hat den Vorteil, das die besten Netze die Möglichkeit haben über mehrere Generation so lange zu trainieren wie sie brauchen um ihr Potenzial auszuschöpfen.
+			Das hat den Vorteil, dass die besten Netze die Möglichkeit haben über mehrere Generation so lange zu trainieren, wie sie brauchen um ihr Potenzial auszuschöpfen.
 			Andererseits sorgt der angepasste score in \ref{select} dafür, dass Netze die schon länger trainiert haben, nicht bevorzugt werden und auch neue Netze noch die Chance haben
-			sich zu etablieren.
+			sich zu etablieren. Zudem wird die Laufzeit gesenkt. Gute Netze die durch Training nich mehr zu verbessern sind, bleiben in der Population ohne jede Generation
+			Trainingszeit zu verschwenden.
 	
 	\section{Ergebnisse}\label{ergeb}
 		
 		Der entwickelte Algorithmus wurde in \textit{Python} implementiert und verwendet die Bibliothek \textit{PyTorch} um die Netze zu trainieren.
-		Das Entwickelte Modul lässt sich sehr einfach ausführen, der Einzige Input ist der Datensatz. 
-		Alle Hyperparameter wie die Anzahl der Genome in der Population kann eingestellt werden, aber auch die Standardwerte funktionieren für die meisten Probleme.
-		\textit{convNEAT} besitzt eine optionalle grafische Oberfläche, die den aktuellen Fortschritt anzeigt und eine noch detailierte Ausgabe im Terminal.
-		Nach jeder Generation werden die besten Netze abgespeichert und es kann das Training unterbrochen und fortgesetzt werden.
+		Das entwickelte Modul lässt sich sehr einfach ausführen, der Einzige Input ist der Datensatz. 
+		Alle Hyperparameter, wie die Anzahl der Genome in der Population kann eingestellt werden, aber auch die Standardwerte funktionieren bereits für die meisten Probleme.
+		Zusätzlich zur detailierten Ausgabe im Terminal besitzt \textit{convNEAT} eine optionale graphische Oberfläche, die den aktuellen Trainingsfortschritt anzeigt und einen Überblick der Population gibt.
+		Nach jeder Generation werden die besten Netze abgespeichert. Das Training kann dann unterbrochen und später fortgesetzt werden.
+		Die Implementation kann online auf \href{https://github.com/Jukamala/convNEAT}{Github} abgerufen werden.
 
-		Augrund der Tatsache, dass \textit{convNEAT} eine sehr große Laufzeit hat und sehr viele Testläufe gemacht werden müssen um die Hyperparameter einzustellen, blieb nicht mehr genug Zeit
-		\textit{convNEAT} auf verschiedenen Datensätzen zu testen um die Vielseitigkeit von \textit{convNEAT} demonstrieren zu können.
-		Es wurden aber einige Tests auf dem (leider etwas limitierten) MNIST Datensatz durchgeführt:
+		Augrund der Tatsache, dass \textit{convNEAT} eine vergleichsweise lange Laufzeit besitzt und sehr viele Testläufe gemacht werden müssen um die Hyperparameter einzustellen, blieb nicht mehr genug Zeit
+		\textit{convNEAT} auf verschiedenen Datensätzen zu testen und so die Vielseitigkeit von \textit{convNEAT} zu demonstrieren.
+		Es wurden jeddoch einige Tests auf dem (leider etwas limitierten) MNIST Datensatz durchgeführt:
 
 		\subsection{MNIST}
 			
