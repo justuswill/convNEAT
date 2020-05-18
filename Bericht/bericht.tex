@@ -13,7 +13,7 @@
 \usepackage{nicefrac}
 \usepackage{extarrows}
 \usepackage[Algorithmus]{algorithm}
-\usepackage{algorithmic}
+\usepackage{algpseudocode}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{tikz}
@@ -22,10 +22,11 @@
 \usepackage{color}
 \usepackage{enumitem}
 \usepackage{hyperref}
-%\usepackage[german]{cleveref}
+\usepackage[ngerman]{babel}
 \usepackage{array}
 \usepackage{marvosym}
 \usepackage{tabularx}
+\usepackage{booktabs}
 
 %Easier abs und norm
 \DeclarePairedDelimiter\abs{\lvert}{\rvert}%
@@ -335,9 +336,9 @@
 
 			Einen ganz anderen Ansatz verfolgen sogenannte genetische Algorithmen. Sie basieren auf den drei genetischen Operatoren \textit{Mutation}, \textit{Selektion} und \textit{Crossover}.
 			Ähnlich zur Evolution in der Natur wird eine Population verwaltet. Die einzelnen Individuen können mutieren, durch evolutionären Druck aussortiert werden und aus zwei
-			Individuen können nachkommen generiert werden, die Teile der Gene der Eltern teilen.
+			Individuen können Nachkommen generiert werden, die Teile der Gene der Eltern besitzen.
 			
-			Für Hyperparameterwahl ist das Paper "Evolving Neural Networks through Augmenting Topologies" \cite{neat} aus dem Jahr 2002 hervorzuheben, das den Grundstein für alle vergleichbaren Methoden gelegt hat.
+			Für die Hyperparameterwahl ist besonders das Paper "Evolving Neural Networks through Augmenting Topologies" \cite{neat} aus dem Jahr 2002 hervorzuheben, das den Grundstein für alle vergleichbaren Methoden gelegt hat.
 			Die Idee ist simpel. Um eine bestmögliche Netztopologie zu finden, kann man mit einem möglichst kleinen, einfachem Netz anfangen und durch Mutation und Crossover
 			neue immer größere Netze erzeugen, die immer besser werden. Sobald die enstehenden Netze nicht mehr besser werden kann man aufhören.
 
@@ -352,100 +353,118 @@
 
 	\section{convNEAT}
 
-		\textit{NEAT} liefert uns die Grundidee für unseren Algorithmus. \\
+		\textit{NEAT} liefert die Grundidee für den entwickelten Algorithmus. \\
 		Wir übertragen das Konzept in die Moderne, in dem wir nicht mit einzelnen Neuron arbeiten,
-		sondern als Grundeinheit direkt ganze \textit{Layer} von Neuronen betrachten und auf und zwischen diesen Mutationsoperationen definieren.
+		sondern als Grundeinheit ganze \textit{Layer} von Neuronen betrachten und auf und zwischen diesen Mutationsperationen definieren. \\
 		Das Training auf den Trainingsdaten überlassen wir einem moderneren Optimierer wie in \ref{train}.
 		Zusätzlich betrachten wir nicht nur neurale Netze sondern auch \textit{Convolutional Neural Networks} die unserem Algorithmus den Namen \textit{convNEAT}
-		verleihen. So können wir besonders Klasifaktionsprobleme in der Bildverarbeitung wie den MNIST Datensatz \ref{mnist} besser lösen.
+		verleihen. So können wir besonders Klasifaktionsprobleme in der Bildverarbeitung wie den MNIST Datensatz \ref{mnist} besser lösen. \\
 
-		Es gibt bereits ähnliche Versuche die Ideen von \textit{NEAT} auf \textit{Convolutional Neural Networks} wie etwa
-		\textit{EXACT} von T. Desell \cite{exact} oder einen Ansatz von Y. Sun et al \cite{convoneat}.
-		Beide Ansätze haben aber Nachteile gegenüber \textit{convNEAT} zeigen aber das ein genetischer Ansatz durchaus zielführend sein kann.
+		Es gibt bereits ähnliche Versuche die Ideen von \textit{NEAT} auf \textit{Convolutional Neural Networks} zu übertragen, wie etwa
+		\textit{EXACT} von T. Desell \cite{exact} oder \textit{EvoCNN} von Y. Sun et al \cite{convoneat}.
+		Beide Ansätze haben Nachteile gegenüber \textit{convNEAT}, zeigen aber, dass ein genetischer Ansatz durchaus zielführend sein kann. \\
 		Sie verwenden keine Kapselung der Netze in Species wie bei \textit{NEAT} und erlauben beide nur begrenzte \textit{Convolutional Neural Networks}.
 		ConvNEAT bietet eine größere Flexibilität und mehr Möglichkeiten für beliebige \textit{feedforward Convolutional Neural Networks}
-		auch mit \textit{Pooling Layern} sowie leichter Erweiterbarkeit und Anpassbarkeit. Durch modernes \textit{Clustering} können
-		bessere Ergebnisse erzielt werden und durch die Evolution von allen Hyperparametern inklusive den Hyperparametern der Optimierers
-		werden dem Anwender alle Entscheidungen abgenommen.
+		auch mit \textit{Pooling Layern}, sowie leichte Erweiterbarkeit und Anpassbarkeit. Durch modernes \textit{Clustering} können
+		bessere Ergebnisse erzielt werden und durch die Evolution von allen Hyperparametern inklusive den Hyperparametern des Optimierers
+		werden dem Anwender alle schwierigen Entscheidungen abgenommen.\\
+
+		Die Grundidee von \textit{convNEAT} ist im folgenden kurz als Pseudocode dargestellt.
+
+		\begin{algorithm}
+			\caption{\textit{convNEAT}}\label{pseudo}
+			\begin{algorithmic}
+				\State \textit{population} $\gets$ Initialisiere die Startpopulation mit einfachen Netzen
+				\While{durschnittliche Accuracy verbessert sich}
+					\State Trainiere alle Netze aus \textit{population} und bestimme ihre Accuracy
+					\State \textit{parents} $\gets$ Selektiere Paare von Netzen aus \textit{population}
+					\State \textit{population} $\gets$ Generiere mit \textit{Crossover} neue Netze aus allen Paaren in \textit{parents}
+					\State Mutiere alle Netze aus \textit{population}
+				\EndWhile
+			\end{algorithmic}
+		\end{algorithm}
 		
-		Bevor wir auf die genaueren Details von convNEAT eingehen, werden wir zuerst ein paar andere Grundlegende Probleme ansprechen.
+		Bevor wir auf weitere Details von \textit{convNEAT} eingehen, werden wir zuerst ein grundlegendes Probleme ansprechen.
 
 		\subsection{Representation}
 
 			Da wir mit einem evolutionären Algorithmus arbeiten, müssen wir eine geieignete genetische Representation finden.
-			Eine Kodierung der Gene eines Netzes in ein Genom bestimmt wie das Netz aussieht und muss deshalb alle Hyperparameter enthält, die uns interessieren.
-			Neben der Anzahl der Größe und \textit{Layer} so wie deren Hyperparameter gehören aber auch alle anderen Hyperparameter z.B. auch
+			Diese Kodierung des Netzes als \textit{Genom}, bestehend aus mehreren Genen, bestimmt wie das Netz aussieht, und muss deshalb alle Hyperparameter enthält die uns interessieren.
+			Neben der Anzahl und der Größe der \textit{Layer}, so wie deren Hyperparameter, gehören aber auch alle anderen Hyperparameter, z.B. 
 			die des Optimieres dazu.
 
 			Die Representation bestimmt schlussendlich welche Netze gebildet werden können, also auch den Suchraum in dem gesucht werden muss.
 			Dieser Suchraum kann dank des evolutionären Ansatzes viel größer sein als bei einer \textit{Grid Search} oder \textit{Random Search} \ref{ansatz}.
-			Y Sun et al \cite{convoneat} verwenden z.B. Listen variabler Länge um Netze darzustellen.
-			Der Suchraum wird beschränkt auf diejenigen \textit{Convolutional Neural Networks}, die erst eine Reihe \textit{Convolutional Layer}
-			und danach eine Reihe von \textit{Fully Connected Layer} aufweisen.
-			Bei convNEAT wollten wir unseren Suchraum nicht so weit einschränken, sondern alle möglichen \textit{feedforward Convolutional Neural Networks} durchsuchen.
+			\textit{EvoCNN} verwendet z.B. eine Liste von \textit{Layern} variabler Länge um Netze darzustellen.
+			Der Suchraum ist beschränkt auf diejenigen \textit{Convolutional Neural Networks}, die erst eine Reihe \textit{Convolutional Layer}
+			und danach eine Reihe von \textit{Fully Connected Layer} aufweisen. 
 
-			convNEAT verwendet deshalb eine Kodierung die an die Grundidee von \textit{NEAT} angelehnt ist.
+			\textit{convNEAT} schränkt den Suchraum nicht so weit ein, sondern lässt alle möglichen \textit{feedforward Convolutional Neural Networks} zu.
+			Gerade für schwierige Probleme und Netzen mit vielen \textit{Layern} reichen einfache Netze wie in \textit{EvoCNN} nicht aus \cite{deep}.
+
+			convNEAT verwendet eine Kodierung, die an die Kodierung in \textit{NEAT} angelehnt ist.
 			\textit{NEAT} kodiert neuronale Netze als Graph, wobei die Neuronen die Knoten und die Verbindungen mit Gewichten die Kanten sind.
-			Natürlich muss dieser Ansatz angepasst werden, trotzdem kann man sich jedes \textit{Convolutional Neural Net}
-			also auch jedes gewöhnliche neuronale Netz als einen Graphen vorstellen:
+			Natürlich muss dieser Ansatz angepasst werden, trotzdem kann man sich jedes \textit{Convolutional Neural Net},
+			also auch jedes gewöhnliche neuronale Netz als einen Graphen vorstellen: \\
 			Die Knoten sind die einzelnen \textit{Layer} und die Verbindungen zwischen den einzelnen \textit{Layern} werden über die Kanten beschreiben.
-			Wie wir bereits in \ref{nets} gesehen haben hängt das davon ab um was es sich bei der hinteren \textit{Layer} handelt.
-			Diese Information, ob \textit{Fully Connected Layer}, \textit{Convolutional Layer} oder \textit{Pooling Layer} ist zusammen mit allen
+			Wie wir bereits in \ref{nets} gesehen haben hängt letzteres davon ab, um was es sich bei der hinteren \textit{Layer} handelt.
+			Diese Information, ob \textit{Fully Connected Layer}, \textit{Convolutional Layer} oder \textit{Pooling Layer}, ist zusammen mit allen
 			zugehörigen Hyperparametern in den Kanten gespeichert.
 
-			Wie bereits erwähnt ist die Anzahl der Neuronen in den Knoten nicht immer frei wählbar, sondern nur falls es sich, bei der eingehenden Kante
-			um eine \textit{Fully Connected Layer} handelt. Aus diesem Grund wird die Größe nicht in den Knoten kodiert,
-			stattdessen wird die Größe durch das Netz propagiert und in jeder Kante bearbeitet. Für \textit{Fully Connected Layer} wird nur gespeichert
-			wie groß die Änderung der Größe ist, also zum Beispiel, dass die \textit{Fully Connected Layer} 20 mehr Neuronen enthält als der Vorgänger.
-			Es können auch inaktive Kantengene in Genom gespeichert werden.
+			Wie bereits erwähnt ist die Anzahl der Neuronen in den Knoten nicht immer frei wählbar, sondern nur falls es sich bei der eingehenden Kante
+			um eine \textit{Fully Connected Layer} handelt. Aus diesem Grund wird die Größe nicht in den Knoten kodiert.
+			Stattdessen wird die Größe des Inputs durch das Netz propagiert und in jeder Kante bearbeitet. Für \textit{Fully Connected Layer} wird gespeichert
+			wie groß die Änderung der Größe ist, also zum Beispiel, dass die nächste \textit{Layer} 20 mehr Neuronen enthält als ihr Vorgänger.
+			Es können auch inaktive Kantengene in Genom gespeichert werden, die einfach ignoriert werden.
 
 			Wenn wir beliebige gerichtete Graphen zulassen stoßen wir auf zwei Probleme:
 			Es kann zu Kreisen kommen, so dass das Durchpropagieren des Inputs nicht mehr funktioniert. \\
 			Diesem Problem können wir entgegenwirken, in dem wir beim Hinzufügen einer Kante darauf achten, dass keine Kreise enstehen. \\
-			Außerdem ist es möglich das ein Knoten zwei eingehende Kanten besitzt, die nicht zueinander passen.
+			Außerdem ist es möglich, dass ein Knoten zwei eingehende Kanten besitzt, die verbunden werden müssen.
 			In diesem Fall müssen durch Hochskalierung, Runterskalierung, einer Mischung aus beiden oder durch das Hinzufügen von Nullen die 
-			Ouputs auf die selbe Größe und konkatiniert werden. Wie genau das passiert ist ein weiterer Hyperparameter der im Knoten kodiert wird.
+			Ouputs auf die selbe Größe gebracht und konkatiniert werden. Wie genau das passiert ist ein weiterer Hyperparameter der im Knoten kodiert wird.
 
 			Für maximale Flexibilität besonders auf die Anwendung der Bildanalyse bezogen, sind alle \textit{Layer} im späteren Netz, dreidimensional.
-			Neben Höhe und Breite gibt es noch verschiedende Channels, in denen z.B. im Input Gelb, Rot und Blau kodiiert werden könnten.
+			Neben Höhe und Breite gibt es noch verschiedende Channels, in denen z.B. im Input Gelb-, Rot- und Blauanteile kodiert werden könnten.
 			Bei MNIST bleibt der Input dann z.B. $\mathbf{X} \in \mathbb{R}^{1 \times 28 \times 28}$.
-			Das sorgt dafür, dass im Verleich zu z.B. EXACT \cite{exact} viel weniger Knoten gebraucht werden, weil viel mehr Faltungen kompakt
-			representiert werden können.
-
-			In Abb. finden sich zwei Beispiel für Netze und ihre Representation.
-
-			%Abbild
-
+			Das sorgt dafür, dass im Verleich zu z.B. \textit{EXACT} viel weniger Knoten gebraucht werden, weil viel mehr Faltungen kompakt
+			representiert werden können. \\
 			Neben der Topologie wird auch noch kodiert welcher Optimierer gerade mit welchen Hyperparametern verwendet wird.
+
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.7]{img/net2.png}
+				\caption{Ein Beispiel für ein komplexeres Netz das kodiert werden kann. Die Farben der Kanten geben ihren Typ an, z.B. steht orange für eine \textit{Convolution Layer}}.
+			\end{figure}
 
 		\subsection{Mutation}
 
 			Die Möglichkeit Genome zu mutieren bildet die Basis jedes genetischen Algorithmuses, so können neue Netze erzeugt werden, die den
-			bisherigen Netzen ähneln. Schlechte Mutationen können in der Selektion aussortiert werden, gute Mutationen bleiben erhalten.
-			Welche Mutation passiert ist zufällig, manche haben jedoch höhere Wahrscheinlichkeit als andere.
-			Die Wahrscheinlihckieten wurden durch viele Testläufe so angepasst, dass Sie sinnvoll sind.
-			Diese Hyper-Hyperparameter müssen jedoch nur einmal bestimmt werden und sind Porblemunabhängig.
-			Trotzdem wäre es denkbar auch eine adaptive Veränderung der Wahrscheinlichkieten einzuabeun, um die Mutationen häufiger auftretten zu lassen,
+			bisherigen Netzen ähneln. Unvorteilhafte Mutationen können in der \textit{Selektion} aussortiert werden, gute Mutationen bleiben erhalten.
+			Welche Mutationen enstehen ist zufällig, manche haben jedoch höhere Wahrscheinlichkeit als andere.
+			Die Wahrscheinlichkeiten wurden durch viele Testläufe so angepasst, dass Sie sinnvoll sind.
+			Diese Hyper-Hyperparameter von \textit{convNEAT} müssen nur einmal eingestellt werden und sind problemunabhängig.
+			Trotzdem wäre es denkbar auch eine adaptive Veränderung der Wahrscheinlichkeiten einzubauen, um diejenigen Mutationen häufiger auftretten zu lassen,
 			die häufiger zu guten Netzen führen.
 
 			\textit{convNEAT} bietet folgende Mutationen:
 
 			\begin{enumerate}
 				\item [] \textbf{Aktivieren und Deaktivieren von Genen} \\
-					Es gibt die Möglichkeit Gene zu deaktivieren und wieder zu reaktivieren. Deaktivierte Gene spielen keine Rolle mehr für das entstehende Netz.
-					Deaktivierte Gene können auch durch den \textit{Crossover} entstehen. Beim Deaktivieren muss sichergestellt sein, dass
-					es noch einen Pfad vom Input zum Output gibt, damit noch ein gültiges Netz entsteht.
+					Es besteht die Möglichkeit Gene zu deaktivieren und wieder zu reaktivieren. Deaktivierte Gene spielen keine Rolle mehr für das entstehende Netz.
+					Deaktivierte Gene können auch durch den \textit{Crossover} \ref{cross} entstehen. Beim Deaktivieren muss sichergestellt sein, dass
+					es noch einen Pfad vom Input zum Output gibt.
 
 				\item [] \textbf{Kante aufteilen} \\
-					Es gibt die Möglichkeit eine bestehende Kante aufzuteilen. Dabei entsteht ein neuer Knoten zwischen zwei existierenden Knoten.
+					Es besteht die Möglichkeit eine bestehende Kante aufzuteilen. Dabei entsteht ein neuer Knoten zwischen zwei existierenden Knoten.
 					Die ursprüngliche Verbindungskante wird deaktiviert und zwei neue Kanten eingefügt. Die erste ist eine Kopie der alten Kante.
-					Die zweite neue Kante ist eines zufälligen Typs. Manche Kanten sind hier wahrscheinlicher, z.B. ist hiner einer
+					Die zweite neue Kante ist eines zufälligen Typs. Manche Kanten sind hier wahrscheinlicher, z.B. ist hinter einer
 					\textit{Convolutional Layer} eine neue \textit{Pooling Layer} am wahrscheinlichsten.
 
 				\item [] \textbf{Kante einfügen} \\
-					Zwischen zwei Knoten kann eine Kante eingefügt werden. Wie beim Aufteilen ist die Art der Kante zufällig.
+					Zwischen zwei Knoten kann eine Kante eingefügt werden. Wie beim Aufteilen einer Kante ist die Art der Kante zufällig.
 					Damit keine Kreise entstehen können, wird für jeden Knoten seine Tiefe im Netz gespeichert.
-					Eine neue Kante zeigt dann immer auf die tiefere Kante, beliebige Pfade durchlaufen dann immer Knoten in echt absteigender Reihenfolge,
+					Eine neue Kante zeigt dann immer auf die tiefere Kante, beliebige Pfade durchlaufen immer Knoten in echt absteigender Tiefe,
 					Kreise sind unmöglich.
 
 				\item [] \textbf{Optimierer} \\
@@ -457,24 +476,24 @@
 					Unter anderem sind folgende Mutationen möglich:
 					\begin{enumerate}
 						\item [] \textbf{Fully Connected Layer} \\
-							Die Aktivierungsfunktion und die Änderung der Größe können mutieren.
+							Die Aktivierungsfunktion und die Größenänderung können mutieren.
 						\item [] \textbf{Convolutional Layer doer Pooling Layer} \\
-							Die Weite und Höhe und Tiefe des Kernels sowie weitere Parameter wie unter anderem \textit{padding} oder \textit{stride} können mutieren.
+							Die Weite, Höhe und Tiefe des Kernels sowie weitere Parameter wie unter anderem \textit{padding} oder \textit{stride} können mutieren.
 					\end{enumerate}
 			\end{enumerate}
 
 		\subsection{Selektion}\label{select}
 			
 			Wichtig für jeden genetischen Algorithmus ist der Operator der \textit{Selektion}. Die besten Netze werden beibehalten und die schlechtesten,
-			z.B. diejenigen die durch eine unvorteilhafte Mutation entstanden sind sollten nicht weiter überleben.
+			z.B. diejenigen die durch eine unvorteilhafte Mutation entstanden sind, sollten nicht weiter überleben.
 			Ein gutes Maß für die Güte eines Netzes ist die \textit{Accuracy} auf den Testdaten. Da beim öfteren Vergleich der \textit{Accuracy} auf den Testdaten,
-			aber die Gefahr des \textit{Overfittings} besteht, also die Chance, dass das Netz auf neuen Daten keine guten Vorhersagen macht, nicht mehr gut generalisiert,
-			wird wie es üblich ist ein Teil der Trainingsdaten nicht zum Trainieren verwendet sondern als Validierungsdaten zurückgehalten.
+			aber die Gefahr des \textit{Overfittings} besteht, also die Chance, dass das Netz das Rauschen der Testdaten lernt und auf neuen Daten keine guten Vorhersagen macht,
+			wird ein Teil der Trainingsdaten nicht zum Trainieren verwendet sondern als Validierungsdaten zurückgehalten.
 			Bei der Selektion kann dann die \textit{Accuracy} auf den Validierungsdaten bestimmt und verglichen werden.
-			Die Testdaten werden nur ganz am Ende verwendet um die Güte des finalen Netzes aus \textit{convNEAT} zu überprüfen.\\
+			Die Testdaten werden nur ganz am Ende verwendet um die Güte des finalen Ergebnisses aus \textit{convNEAT} zu überprüfen.\\
 
 			Damit Netze die schon länger trainiert haben keinen Vorteil gegenüber frisch mutierten Netzen haben gibt es für jede trainierte Epoche eine Strafe.
-			Die Strafe ist linear im logarithmischen Klassifikationsfehler, das heißt:
+			Die Strafe ist linear im logarithmischen Klassifikationsfehler.
 
 			\begin{defi}[Log classification error] ~ \\
 				Der logarithmische Klassifikationsfehler eines Netzes mit Accuracy $a$ ist definiert als \\
@@ -486,77 +505,99 @@
 			Denn so gilt:
 			$$ logerr(score(a, p)) = logerr(a) + n * decay$$
 
-			Basierend auf diesem angepasstem score können jetzt Paare aus Genomen gebildet werden die im nächsten Schritt, dem \textit{Crossover} kombiniert werden können.
-			Es gibt mehrere Möglichkeiten diese Selektion durchzuführen. In \textit{convNEAT} gibt es mehrere Möglichkeiten:
-			Von einfachen Methoden, wie die Auswahl aller besten Genome, oder der zufällifen Wahl, bei der bessere Gene höhere Wahrscheinlichkeiten,
-			die von dem Score abhängen sind haben, bis hin zu komplizierteren Methoden wie der \textit{Tournament selection} bei der zufällig eine
-			Gruppe von $k$ Genomen ausgewählt wird von denen das Beste ausgewählt wird oder \textit{stochastic universal sampling} \cite{sus}.
+			Basierend auf diesem angepasstem \textit{score} können jetzt Paare aus Genomen gebildet werden die im nächsten Schritt, dem \textit{Crossover} kombiniert werden können.
+			Es gibt viele Möglichkeiten diese Selektion durchzuführen. In \textit{convNEAT} sind mehrere Methoden implemtiert. \\
+			Von einfachen Methoden, wie die simple Auswahl aller besten Genome \textit{(cutoff)}, oder der zufälligen Wahl, bei der jedes Genom eine Wahrscheinlichkeit
+			proportional zu seinem \textit{score} hat \textit{(fps)}, bis hin zu komplizierteren Methoden wie der \textit{Tournament selection (ts)} bei der zufällig eine
+			Gruppe von $k$ Genomen ausgewählt wird, von denen das Beste ausgewählt wird, oder der \textit{stochastic universal sampling (sus)} \cite{sus}.
 
-			Welche Methode die beste ist, muss mit viel Testläufen auf verschiedenen Problemen ausgetestet werden, da meine Rechenzeit aber limitiert war konnte
+			Welche Methode die beste ist, muss mit vielen Testläufen auf verschiedenen Problemen ausgetestet werden, da meine Rechenzeit aber limitiert war, konnte
 			ich nur einige wenige Tests auf dem MNIST Datensatz durchführen. Hier schien es, als ob \textit{stochastic universal sampling}
 			eine stabile und effektive Methode der Selektion ist.
 
 			Wichtig ist das die Selektion auch ein paar schlechtere Netze überleben lässt. Denn vielleicht sind manche Netze nicht lange genug trainiert worden
 			und zeigen ihr volles Potenzial nach etwas mehr Zeit. \textit{stochastic universal sampling} besitzt diese Eigenschaft.
 
-			Um eine Intuition für die verschiedenen Selektionsfunktion zu bekommen sind sie hier verglichen:
+			Um eine Intuition für die verschiedenen Selektionsfunktion zu bekommen sind in \ref{tab:select} die durschnittliche Auswahlwahrscheinlichkeit
+			einiger Verfahren für ein Beispielpopulation $x_i$, $i \in \{1, \cdots, 15\}$ mit $score(x_i) = i^2$ angegeben.
+			Man kann gut sehen, wie \textit{stochastic universal sampling} bessere Werte bevorzugt, aber auch schlechtere Werte noch berücksichtigt.
 
-			% Abbild Selektion
+			\begin{table}[h]
+				\centering
+				\begin{tabular}{llllllllllllllll}
+					\toprule
+					& $x_1$ & $x_2$ & $x_3$ & $x_4$ & $x_5$ & $x_6$ & $x_7$ & $x_8$ & $x_9$ & $x_{10}$ & $x_{11}$ & $x_{12}$ & $x_{13}$ & $x_{14}$ & $x_{15}$ \\
+					\midrule
+					\textit{cutoff} & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 17 & 17 & 17 & 17 & 17 & 17 \\
+					\textit{fps} & 0 & 0 & 1 & 1 & 2 & 3 & 4 & 5 & 7 & 8 & 10 & 12 & 13 & 15 & 17 \\
+					\textit{ts} & 0 & 0 & 0 & 1 & 2 & 4 & 5 & 7 & 8 & 10 & 11 & 12 & 13 & 13 & 13 \\
+					\textit{sus} & 0 & 0 & 1 & 1 & 2 & 3 & 4 & 5 & 6 & 8 & 10 & 12 & 13 & 16 & 18 \\
+					\bottomrule
+				\end{tabular}
+				\caption{Einige Selektionsfunktionen zu $score(x_i) = i^2$ , alle Werte in $\%$}
+				\label{tab:select}
+			\end{table}
+				
 		
-		\subsection{Crossover}
+		\subsection{Crossover} \label{cross}
 
-			Eine wetere Operation in genetischen Algorithmen ist der \textit{Crossover}. Er erzeugt aus zwei Genomen, ein neues Genom.
-			Dieses neue Genome erhält alle Gene der Eltern. Wichtig für \textit{convNEAT} sind, wie bei \textit{EXACT} \cite{exact},
+			Eine weitere Operation in genetischen Algorithmen ist der \textit{Crossover}. Er erzeugt aus zwei Genomen ein neues Genom.
+			Dieses neue Genome erhält kann Gene beider Eltern enthalten. \textit{convNEAT} verwendet, wie bei \textit{EXACT},
 			die Parameter \textit{more fit parent crossover rate} und \textit{less fit parent crossover rate}.
 			Diese beiden beschreiben wie viel Prozent des jeweiligen Genomes aktiviert bleiben soll.
-			Gene (hier vor allem die Kanten), die beispielsweise nur im besseren Genom (mit höherem Score \ref{select}) vorkommen,
-			werden mit Wahrscheinlichkeit \textit{more fit parent crossover rate} aktiviert übernommen.
+			Gene (hier vor allem die Kanten), die beispielsweise nur im besseren Genom (mit höherem \textit{score} \ref{select}) vorkommen,
+			werden mit Wahrscheinlichkeit gleich der \textit{more fit parent crossover rate} aktiviert übernommen.
 			Alle anderen Gene werden deaktiviert insofern das möglich ist.
 
-			Da die Eltern zwei beliebige Graphen sein können, ist es schwierig zu sagen, welche Gene gleich sind und wie die nicht gleichen Gene kombiniert werden sollen.
-			Abhilfe schafft das Konzept der \textit{historical markers} aus \textit{NEAT}. Jedes Gene bekommt eine eindeutige Zahl zugeordnet und wenn durch
-			Muatation neue Kanten oder Knoten entstehen werden ihnen neue Zahlen zugeordnet.
+			Da die Eltern zwei beliebige Graphen sein können, ist es schwierig zu sagen, welche Gene gleich sind und wie die ungleichen Gene kombiniert werden sollen.
+			Abhilfe schafft das Konzept der \textit{historical markers} aus \textit{NEAT}. Jedes Gen bekommt eine eindeutige Zahl, die \textit{innovation number} zugeordnet.
+			Wenn durch Muatation neue Kanten oder Knoten entstehen, werden ihnen neue Zahlen zugeordnet.
 			Möchte man zwei Genome vergleichen, kann man sich die \textit{Marker} anschauen und sieht sofort wie viele Genome gleich sind und wie
 			unterschiedlich (im biologischen Sinne) die Genome sind.
 
-			Ein simples Beispiel für einen Crossover findet sich in in Abb. 
+			Ein simples Beispiel für einen Crossover findet sich in in \ref{fig:crossover}
 
-			% Abbild Crossover
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.6]{img/crossover.png}
+				\caption{Ein Beispiel für Crossover zweier Graphen aus \cite{neat}}
+				\label{fig:crossover}
+			\end{figure}
 
 		\subsection{Clustering}
 
-			Mit den obigen genetischen Operatoren kann ein genetischer Algorithmus entworfen werden, der theoretisch immer bessere Netze erzeugen kann.
-			In der Praxis tritt man jedoch auf ein Problem das schon bei der Entwicklung von \textit{NEAT} bekannt war.
-			Wird ein neues Netz generiert, z.B. durch \textit{Crossover} so kann es in der Praxis oft nicht lange überleben, bis es durch die Selektion
-			aussortiert wird. Das neue Netz braucht aber einige Zeit um durch Training, oder weitere Mutationen langsam besser zu werden, bis es
-			kompetetiv genug ist, um mit den aktuell besten Netzen verglichen werden kann, die schon über viele Generationen optimiert wurden.
+			Mit den obigen genetischen Operatoren ist bereits das Grundgerüst für \textit{convNEAT} entworfen.
+			Theoretisch werden die Netze immer komplizierter und dadurch auch besser.
+			In der Praxis tritt man jedoch auf ein Problem, das schon bei der Entwicklung von \textit{NEAT} bekannt war.
+			Wird ein neues Netz generiert, z.B. durch \textit{Crossover} so kann es in der Praxis oft nicht lange überleben, es wird durch die Selektion
+			schnell wieder aussortiert. Das neue Netz braucht nämlich einige Zeit um durch Training, oder weitere Mutationen langsam besser zu werden, bis es
+			kompetetiv genug ist, um mit den aktuell besten Netzen verglichen werden zu können, die schon über viele Generationen optimiert wurden.
 
-			Eine Lösung für das Problem ist wie bei Y. Sun et al \cite{convoneat} eine Selektion auszuwählen, die nur sehr geringen
+			Eine Lösung für das Problem ist wie \textit{EvoCNN} eine Selektion auszuwählen, die nur sehr geringen
 			\textit{Selektionsdruck} ausübt, also auch schwache Netze oft überleben lässt. Da aber mit Senkung des \textit{Selektionsdruck}
-			auch die Geschwindigkeit sinkt, mit der Fortschritte gemacht werden, verwendet \textit{convNEAT} zusätzlich das Konzept
+			auch die Geschwindigkeit sinkt, mit der Fortschritte gemacht werden können, verwendet \textit{convNEAT} stattdessen das Konzept
 			der \textit{Artentrenung} (im Englischen \textit{Speciation}), im weiteren auch mit \textit{Clustering} bezeichnet.
 
-			Ähnliche Netze mit ähnlicher Topologie werden in einzelne \textit{Arten} (\textit{Cluster}) aufgeteilt, so dass Netze im gleichen
+			Ähnliche Netze mit ähnlicher Topologie werden in einzelne \textit{Arten} (\textit{Cluster})zusammengefasst, so dass Netze im gleichen
 			Cluster möglichst ähnlich und in verschiedenen Cluster möglichst verschieden sind.
-			Die Selektion erfolgt jetzt nur in den einzelnen Clustern, so dass es dauerhaft Cluster von Netzen geben kann, die sich von dem besten Cluster unterscheiden.
-			Während das beste Cluster weiter optimiert wird gibt \textit{convNEAT} auch anderen Ansätzen die Chance erforscht zu werden und optimiert zu werden.
+			Die Selektion erfolgt jetzt nur innerhalb den einzelnen Clustern, so dass es dauerhaft Cluster von Netzen geben kann, die sich von dem besten Cluster unterscheiden.
+			Während das beste Cluster weiter optimiert wird gibt \textit{convNEAT} auch anderen Ansätzen die Chance weiter erforscht und optimiert zu werden.
 
-			Das Zusammenspiel der einzelnen Cluster untereinander muss auch genau geregelt sein. \textit{convNEAT} sorgt dafür, dass
-			die besten Cluster größer werden können, um mehr Rechenzeit in die Optimierung der aktuellen Lösung zu investieren, aber gleichzeitig, andere
-			Cluster nicht zu klein werden, auch wenn sie gerade schlechter sind. Cluster die sich nicht weiter verbessern, weil seine Netze einfach
-			nicht gut für das Problem sind werden irgendwann gelöscht.
+			Das Zusammenspiel der einzelnen Cluster untereinander muss genau geregelt sein. \textit{convNEAT} sorgt dafür, dass
+			die besten Cluster größer werden können, um mehr Rechenzeit in die Optimierung der aktuell besten Lösung zu investieren, aber gleichzeitig andere
+			Cluster nicht zu klein werden, auch wenn sie schlechter sind. Cluster die sich nicht weiter verbessern, weil die Netztopolgie einfach
+			nicht passend für das Problem ist, werden nach einer gewissen Zeit gelöscht.
 
 			Damit \textit{Clustering} funktionieren kann brauchen wir zwei Dinge: Eine Abstandsfunktion und einen Clusteralgorithmus.
 
 			\subsubsection{Ähnlichkeit}
 
 				Das Konzept von \textit{"ähnlichen"} Genomen muss nun mathematisch definiert werden.
-				Für jede Art von Gen kann ein Ahnlichkeit zwischen $0$ und $1$ defineirt werden, in Abhängigkeit davon wie unterschiedlich
-				die Hyperparameter sind. $0$ bedeutet, dass die verglichenen Gene gleich sind
-				und je unterschiedlicher zwei Gene sind, desto näher wird die Ähnlichkeit zur $1$.
+				Für jede Art von Gen wird ein Ähnlichkeitsfunktion $sim(x, y) \in [0, 1]$ definiert, die angibt wie unterschiedlich
+				die Hyperparameter sind. $sim(x,y) = 0$ bedeutet, dass die Ausprägungen $x$ und $y$ des Gens gleich sind. Je näher $sim(x,y)$ der $1$ ist, desto verschiedener sind die beiden Ausprägungen.
 
-				\begin{defi} [Abstandsfunktion]
-					\textit{convNEAT} verwendet folgende Funktion: \\
+				\begin{defi} [Distanzmetrik]
+					\textit{convNEAT} verwendet folgenden Abstand: \\
 					$$dist = c_0*S + c_1*D + c_2*E + c_3*T + c_4*K + c_5*X$$
 					wobei $S$ der Unterschied in den gemeinsamen Kanten ist, \\
 					$D$ und $E$ zusammen die Anzahl der Gene die nur in einem der beiden Genome vorkommt, \\
@@ -564,29 +605,27 @@
 				\end{defi}
 				
 				Diese Abstandsfunktion sorgt dafür, dass alle Unterschiede eine festlegbare Rolle spielen.
-				Die Parameter $c$ wurden durch Testläufe optimiert. Mit Abstand am wichtigsten sind $S$, $D$ und $E$.
-				Trotzdem bleibt das Konzept von Ähnlichkeit leicht subjektiv.
+				Die Parameter $c$ wurden durch Testläufe optimiert. Am wichtigsten sind $S$, $D$ und $E$.
 
 			\subsubsection{Clusteralgorithmus}
 				
-				Das Problem eine Menge von Daten $\mathbf{X}$ in $k$ Cluster einzuteilen lässt sich als Optimierungsproblem darstellen. Zu minimieren ist der
+				Das Problem, eine Menge von $n$ Daten $\mathbf{X} \in \mathcal{A}^n$ in $k$ Cluster einzuteilen lässt sich als Optimierungsproblem darstellen. Zu minimieren ist der
 				Abstand der Mitglieder der Clusters $S_i$ zum jeweiligen Clustermittelpunkt $\mu_i$:
 
 				\begin{defi}
 					$$J \coloneqq \sum _{i=1}^{k}\sum _{x_j \in S_i} dist(x_j, \mu_i)^2$$
 				\end{defi}
 
-				Für den Fall $\mathbf{X} \in \mathbb{R}^m$ gibt es hervorragende Algorithmen wie \textit{k-Means} \cite{kmeans}, um das Optimierungsproblem
-				approximativ und sehr schnell zu lösen. \textit{k-Means} ist ein iteratives Verfahren, dass ausgehen von Start-Clustermittelpunkten $\mu_i^0$
-				iterativ immer bessere $\mu_i$ findet, in dem es den Mittelpunkt der aktuellen zu Cluster $S_i$ gehörenden Datenpunkt zum neuen $\mu_i$ macht
-				bis dieser Prozess konvergiert.
+				Für den Fall $\mathcal{A} = \mathbb{R}^m$ gibt es hervorragende Algorithmen wie \textit{k-Means} \cite{kmeans}, um das Optimierungsproblem
+				approximativ sehr schnell zu lösen. \textit{k-Means} ist ein iteratives Verfahren, dass ausgehen von Start-Clustermittelpunkten $\mu_i^0$
+				immer bessere $\mu_i$ findet, in dem es den Mittelpunkt der aktuellen zu Cluster $S_i$ gehörenden Datenpunkte zum neuen $\mu_i$ macht bis dieser Prozess konvergiert.
 
 				Leider lässt sich \textit{k-Means} nicht auf unser Problem anweden, da der Suchraum kein Vektorraum mit einer Basis ist,
-				der Begriff eines Mittelpunktes ist nicht defniert. Wir müssen lediglich mit dem Abstand $dist$ arbeiten. 
+				der Begriff eines Mittelpunktes ist nicht defniert. Wir dürfen lediglich mit der Metrik $dist$ arbeiten.
 
 				\textit{convNEAT} verwendet deshalb eine stark modifizierte Variante des \textit{k-Medoid} Algorithmuses.
 				Im Gegensatz zum Mittelpunkt wählen wir den \textit{"Median"}, in unserem Fall das Genom im Cluster, dass den geringsten Abstand zu allen anderen
-				Clustermitgliedern hat, also $$fit(z) \coloneqq \sum _{x_j \in S_i} dist(x_j, z)$$ minimiert.
+				Clustermitgliedern hat, also $$med(z) \coloneqq \sum _{x_j \in S_i} dist(x_j, z)$$ minimiert.
 
 				\textit{k-Medoid} kann deshalb so umgebaut werden, dass es nur von $dist$ abhängt.
 				Einige Dinge sind noch zu beachten, z.B. darf kein Cluster zu klein werden, da sonst keine sinnvolle Selektion stattfinden kann.

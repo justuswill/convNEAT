@@ -33,6 +33,6 @@ if __name__ == '__main__':
     data_train, data_test = mnist(torch_device)
 
     # train
-    trainer = ConvNEAT(output_size=10, n=20, torch_device=torch_device, name='test_run_1', seed=15)
-    trainer.prompt(data_train, save_mode="elites", elitism_rate=0.3, min_species_size=4, epochs=2,
+    trainer = ConvNEAT(output_size=10, n=50, torch_device=torch_device, name='test_run_2', seed=20)
+    trainer.prompt(data_train, save_mode="elites", elitism_rate=0.3, min_species_size=4, epochs=4,
                    n_generations_no_change=3, tol=0, min_species=2, mutate_speed=0.3)
