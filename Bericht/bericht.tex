@@ -506,6 +506,7 @@
 			$$ logerr(score(a, p)) = logerr(a) + n * decay$$
 
 			Basierend auf diesem angepasstem \textit{score} können jetzt Paare aus Genomen gebildet werden die im nächsten Schritt, dem \textit{Crossover} kombiniert werden können.
+			Es ist auch möglich, dass ein Paar aus zweimal dem gleichen Genom besteht. Dann wird der \textit{Crossover} übersprungen und es kommt nur zur \textit{Muatation} des Genoms.
 			Es gibt viele Möglichkeiten diese Selektion durchzuführen. In \textit{convNEAT} sind mehrere Methoden implemtiert. \\
 			Von einfachen Methoden, wie die simple Auswahl aller besten Genome \textit{(cutoff)}, oder der zufälligen Wahl, bei der jedes Genom eine Wahrscheinlichkeit
 			proportional zu seinem \textit{score} hat \textit{(fps)}, bis hin zu komplizierteren Methoden wie der \textit{Tournament selection (ts)} bei der zufällig eine
@@ -641,10 +642,23 @@
 				neuartige Netze entstanden sind oder nach der Selektion zu wenige Netze eines Cluster übrig bleiben.
 
 				\textit{convNEAT} ändert adaptiv die Anzahl der Cluster, falls dies nötig ist und achtet trotzdem darauf, dass die Konsistenz der Cluster erhalten bleibt.
+				Ein Beispiel für die Ergebnisse des Clusterings finden sich in Abbildung \ref{fig:clust_ex} und \ref{fig:clust_d}.
 
-				% Abbild Distanzmatrix
+				\begin{figure}[h]
+					\centering
+					\includegraphics[scale=0.58]{img/cluster_example.png}
+					\caption{Die besten Netze aus zwei Clustern einer Population. Zu sehen ist ein Cluster mit simpleren Netzen mit einer
+						\textit{Convolutional Layer} gefolgt von einer \textit{Fully Connected Layer} sowie Cluster mit komplexeren Netzen.}
+					\label{fig:clust_ex}
+				\end{figure}
 
-				% Abbild Clusterung von Netzen
+				\begin{figure}[h]
+					\centering
+					\includegraphics[scale=0.6]{img/cluster.png}
+					\caption{Die zu \ref{fig:clust_ex} gehörende Distanzmatrix $D$ mit $D_{ij} = dist(i, j)$.
+						Blaue Farben zeigen eine hohe Ähnlichkeit an. Die rot umrandeten Teilmatrizen sind die clusterinternen Distanzen}
+					\label{fig:clust_d}
+				\end{figure}
 
 		\subsection{Eliten und Training}
 			
@@ -665,46 +679,80 @@
 			sich zu etablieren. Zudem wird die Laufzeit gesenkt. Gute Netze die durch Training nich mehr zu verbessern sind, bleiben in der Population ohne jede Generation
 			Trainingszeit zu verschwenden.
 	
+	\clearpage
+
 	\section{Ergebnisse}\label{ergeb}
 		
 		Der entwickelte Algorithmus wurde in \textit{Python} implementiert und verwendet die Bibliothek \textit{PyTorch} um die Netze zu trainieren.
 		Das entwickelte Modul lässt sich sehr einfach ausführen, der Einzige Input ist der Datensatz. 
 		Alle Hyperparameter, wie die Anzahl der Genome in der Population kann eingestellt werden, aber auch die Standardwerte funktionieren bereits für die meisten Probleme.
-		Zusätzlich zur detailierten Ausgabe im Terminal besitzt \textit{convNEAT} eine optionale graphische Oberfläche, die den aktuellen Trainingsfortschritt anzeigt und einen Überblick der Population gibt.
+		Zusätzlich zur detailierten Ausgabe im Terminal besitzt \textit{convNEAT} eine optionale graphische Oberfläche (siehe \ref{fig:gui}), die den aktuellen Trainingsfortschritt anzeigt und einen Überblick der Population gibt.
 		Nach jeder Generation werden die besten Netze abgespeichert. Das Training kann dann unterbrochen und später fortgesetzt werden.
 		Die Implementation kann online auf \href{https://github.com/Jukamala/convNEAT}{Github} abgerufen werden.
+		Die Implementation bietet leichte Erweiterungsmöglichkeiten für andere \textit{Layer}-Typen, Optimierer oder \textit{score} Funktionen.
 
 		Augrund der Tatsache, dass \textit{convNEAT} eine vergleichsweise lange Laufzeit besitzt und sehr viele Testläufe gemacht werden müssen um die Hyperparameter einzustellen, blieb nicht mehr genug Zeit
 		\textit{convNEAT} auf verschiedenen Datensätzen zu testen und so die Vielseitigkeit von \textit{convNEAT} zu demonstrieren.
 		Es wurden jeddoch einige Tests auf dem (leider etwas limitierten) MNIST Datensatz durchgeführt:
 
+		\begin{figure}[h]
+			\centering
+			\includegraphics[scale=0.6]{img/dashboard.png}
+			\caption{Die Öberfläche von \textit{convNEAT}. Neben dem besten und dem aktuell trainierten Netz findet
+				sich hier eine Übersicht über die \textit{Performance} und die \textit{Clusterung}.
+				Da MNIST keine sehr komplexer Datensatz ist, konnte auch eine einfache Topologie \textit{"gewinnen"}}
+			\label{fig:gui}
+		\end{figure}
+
+		\clearpage
+
 		\subsection{MNIST}
 			
-			Auf den Standardeinstellung erzeugt \textit{convNEAT} reltativ schnell Netze mit einer Accuracy von über $98$ und erfüllt damit die Ansprüche die wir an
-			den Algortihmus gestellt haben, automatisch ein passables Ergebnis zu erreichen.
-			In den Abbildungen finden sich die besten Netze nach 10 Generation, so wie eine Übersicht über den Verlauf des Trainings.
+			Auf den Standardeinstellung erzeugt \textit{convNEAT} reltativ schnell Netze mit einer Accuracy von über $98 \%$ (je nach Seed sogar fast bis $99 \%$
+			 und erfüllt damit die Ansprüche, die wir an den Algortihmus gestellt haben, automatisch ein passables Ergebnis zu erreichen.
+			Die enstehenden Netze unterscheiden sich von Netzen die ein Mensch erstellen würde, sie sind viel organischer.
+			In den Abbildungen \ref{fig:b1} und \ref{fig:b2} finden sich das besten Netz eines zufälligen Durchlaufs mit 15 Generation, so wie eine Übersicht über den Verlauf des Trainings.
 
-			% MNIST
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.6]{img/bestnet.png}
+				\caption{Das beste Netz mit einer \textit{Accuracy} von $98,11 \%$}
+				\label{fig:b1}
+			\end{figure}
 
-			Wie in \ref{mnist} nachzulesen ist, ist MNSIT ein bereits \textit{"gelöstes"} Problem, bei dem schon Genauigkeiten von über $99$ erreicht wurden.
+			\begin{figure}[h]
+				\centering
+				\includegraphics[scale=0.6]{img/verlauf.png}
+				\caption{Eine grapische Darstellung des Verlaufes. Man erkennt die einzelnen Cluster mit apaptiv angepasster Größe. In der 10. Generation
+						wird ein Cluster gelöscht, dass sich 3 Generationen lang nicht weiter verbessert hat.}
+				\label{fig:b2}
+			\end{figure}
+
+			Wie in \ref{mnist} nachzulesen ist, ist MNSIT ein bereits \textit{"gelöstes"} Problem, bei dem schon Klassifizierer mit einer \textit{Accuracy} über $99.5\%$ existieren.
 			Das letzte Prozent wird meist erst mit geieignetem Preprocessing der Daten erreicht.
 
 			Vergleicht man die Resultate mit denen von \textit{EXACT}, so sieht man, dass die entstehenden Netze wie zu erwarten kompakter sind.
-			\textit{EXACT} lief über einen längeren Zeitraum verteilt auf vielen Computern gleichzeitig.
-			Welcher Alogorithmus schneller ist ist deshalb schlecht abzuschätzen.
+			\textit{EXACT} lief über einen längeren Zeitraum verteilt auf mehreren Computern nebenläufig während \textit{convNET} schon nach einigen Stunden auf einem normalen Laptop
+			Ergebnisse erzeilen kann. Welcher Alogorithmus schneller ist, ist trotzdem schlecht abzuschätzen.
 			Die Accuracy ist vergleichbar, \textit{EXACT} erreicht in 4 Läufen eine Accuracy zwischen $97.58$ und $98.32$.
-			Auch Y. Sun et all erreichen eine etwas bessere Accuracy von $98.72$.
+			Auch \textit{EvoCNN} erreicht eine ähnliche \textit{Accuracy} von durschnittlich $98.72$.
 
-		
+	\clearpage
+
 	\section{Ausblick}
 
 		Wie bereits in \ref{ergeb} diskutiert wäre es interessant \textit{convNEAT} auf weiteren Benchmarkproblemen, wie dem \textit{ImageNet} Datensatz zu testen,
 		die noch nicht \textit{"gelöst"} sind. Hier würde sich zeigen wie flexibel und gut \textit{convNEAT} wirklich ist.
 
 		Die Hyperparameter von \textit{convNEAT} könnten zu dem noch intensiver getestet werden und die Performance so noch einmal deutlich zu verbessern.
+		Eine weiter Überlegen ist es die besten Netze der Population \textit{"abstimmen"} zu lassen, so kann ebenfalls eine noch bessere \textit{Accuracy}
+		erreicht werden.
+
+		Als letztes wäre es noch möglich die leichte Erweiterbarkeit auszunutzen um auch auf anderen Probleme jenseits von Klassifikationsprobleme zu lösen oder andere
+		neuronale Netze wie \textit{Recurrent Neural Networks} zuzulassen.
 
 \clearpage
 
-\printbibliography[heading=bibintoc, title={References}]
+\printbibliography[heading=bibintoc, title={Referenzen}]
 
 \end{document}

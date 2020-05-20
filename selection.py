@@ -68,6 +68,11 @@ def stochastic_universal_sampling(evaluated_genomes, k, selection_percentage=0.3
     Select via SUS and than sample random couples.
     Does not avoid identical parents
     """
+    # Quick fix for more offspring from mutation.
+    mutrate = 0.25
+    muts = int(0.25 * k)
+    nmuts = k - muts
+
     n = len(evaluated_genomes)
     m = max(2, math.floor(selection_percentage * n))
     scores = [s for g, s in evaluated_genomes]
@@ -75,7 +80,10 @@ def stochastic_universal_sampling(evaluated_genomes, k, selection_percentage=0.3
     start = random.uniform(0, step)
     cum_scores = np.cumsum(scores)
     parents = [evaluated_genomes[np.where(cum_scores > start + i*step)[0][0]][0] for i in range(m)]
-    indices = [random.sample(range(m), k=2) for _ in range(k)]
+    indices = [random.sample(range(m), k=2) for _ in range(nmuts)]
+
+    # Also mutation only
+    indices += [[i, i] for _ in range(muts) for i in random.sample(range(m), k=1)]
     return [list(map(lambda i: parents[ind[i]], [0, 1])) for ind in indices]
 
 
@@ -86,15 +94,15 @@ if __name__ == '__main__':
     for f in [cut_off_selection, tournament_selection, fitness_proportionate_selection,
               fitness_proportionate_tournament_selection, linear_ranking_selection, stochastic_universal_sampling]:
         out = ""
-        for n in [2, 5, 10, 20]:
+        for n in [2, 5, 10, 15]:
             k = math.floor(0.95 * n)
-            l = [[i, i**(3/2)] for i in range(n, 0, -1)]
+            l = [[i, i**(2)] for i in range(n, 0, -1)]
             if prnt:
-                if n == 20:
+                if n == 15:
                     prnt = False
                 print("n = %2d [" % n + " ".join(sorted(["%.1f" % i**(3/2) for i in range(n, 0, -1)])) + "]")
             scores = {i: 0 for i in range(1, n+1)}
-            for j in range(5000):
+            for j in range(10000):
                 p = f(l, k=k)
                 for c in p:
                     for t in c:

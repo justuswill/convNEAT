@@ -109,7 +109,11 @@ class ADAMGene(_Optimizer):
         return [self.log_learning_rate, self.log_weight_decay, self.parameters]
 
     def load(self, save):
-        self.log_learning_rate, self.log_weight_decay, self.parameters = save
+        if len(save) == 2:
+            self.log_learning_rate, self.log_weight_decay = save
+            self.parameters = None
+        else:
+            self.log_learning_rate, self.log_weight_decay, self.parameters = save
         return self
 
     def init_log_learning_rate(self):

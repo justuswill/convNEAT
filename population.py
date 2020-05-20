@@ -143,7 +143,7 @@ class Population:
             self.species = {species: [genome[0](self).load(genome[1], load_params=load_params) for genome in genomes]
                             for species, genomes in saved_genomes.items()}
 
-    def cluster(self, threshold=120, rel_threshold=(1.2, 0.75)):
+    def cluster(self, threshold=120, rel_threshold=(1.2, 0.85)):
         """
         Cluster the genomes with K_Medoids-Clustering
         Change the number of species if needed (-2 .. +2)

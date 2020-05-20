@@ -39,8 +39,11 @@ def build_net_from_genome(genome, input_size, output_size):
         optimizer = torch.optim.Adam(net.parameters(), lr=2 ** opt.log_learning_rate,
                                      weight_decay=2 ** opt.log_weight_decay)
         # Load state from gene
-        if opt.parameters is not None:
-            optimizer.load_state_dict(opt.parameters)
+        try:
+            if opt.parameters is not None:
+                optimizer.load_state_dict(opt.parameters)
+        except:
+            pass
     else:
         raise ValueError('Optimizer %s not supported' % type(genome.optimizer))
 
